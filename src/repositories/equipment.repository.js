@@ -19,7 +19,6 @@ export class EquipmentRepository {
       this.items = JSON.parse(content);
     } catch (err) {
       if (err.code === 'ENOENT') {
-        // Если файла еще нет — стартуем с пустым массивом и создаем файл
         this.items = [];
         await this.persist();
       } else {
@@ -68,8 +67,8 @@ export class EquipmentRepository {
     this.items[index] = {
       ...this.items[index],
       ...patch,
-      id: this.items[index].id, // Защита: id менять нельзя
-      createdAt: this.items[index].createdAt, // Защита: createdAt менять нельзя
+      id: this.items[index].id,
+      createdAt: this.items[index].createdAt,
       updatedAt: new Date().toISOString(),
     };
 
@@ -87,6 +86,4 @@ export class EquipmentRepository {
     return true;
   }
 }
-
-// Экспортируем синглтон репозитория
 export const equipmentRepository = new EquipmentRepository();

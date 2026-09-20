@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { equipmentRepository } from '../repositories/equipment.repository.js';
+import { requestRepository } from '../repositories/request.repository.js';
 import { weatherService } from './weather.service.js';
 import { NotFoundError, ConflictError } from '../errors/index.js';
 
 export class EquipmentService {
-  constructor(repo = equipmentRepository, weather = weatherService) {
+  constructor(
+    repo = equipmentRepository,
+    reqRepo = requestRepository,
+    weather = weatherService
+  ) {
     this.repo = repo;
+    this.reqRepo = reqRepo;
     this.weather = weather;
   }
 
@@ -95,11 +101,14 @@ export class EquipmentService {
     return await this.repo.update(id, patch);
   }
 
-  async delete(id, hasActiveRequestsChecker = null) {
+  async delete(id) {
     await this.getById(id);
 
-    if (hasActiveRequestsChecker && (await hasActiveRequestsChecker(id))) {
-      throw new ConflictError('Невозможно удалить оборудование: по нему имеются незакрытые заявки на обслуживание');
+    const activeRequests = await this.reqRepo.findActiveByEquipmentId(id);
+    if (activeRequests.length > 0) {
+      throw new ConflictError(
+        'Невозможно удалить оборудование: по нему имеются незакрытые заявки на обслуживание'
+      );
     }
 
     await this.repo.delete(id);
