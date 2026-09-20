@@ -16,7 +16,17 @@ export class EquipmentService {
   }
 
   async getAll(query = {}) {
-    const { status, type, search, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 10 } = query;
+    const {
+      status,
+      type,
+      search,
+      installedFrom,
+      installedTo,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 10,
+    } = query;
 
     let items = await this.repo.findAll();
 
@@ -33,6 +43,14 @@ export class EquipmentService {
           item.name.toLowerCase().includes(searchLower) ||
           item.serialNumber.toLowerCase().includes(searchLower)
       );
+    }
+    if (installedFrom) {
+      const fromTime = new Date(installedFrom).getTime();
+      items = items.filter((item) => new Date(item.installedAt).getTime() >= fromTime);
+    }
+    if (installedTo) {
+      const toTime = new Date(installedTo).getTime();
+      items = items.filter((item) => new Date(item.installedAt).getTime() <= toTime);
     }
 
     const total = items.length;

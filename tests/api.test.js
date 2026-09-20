@@ -78,22 +78,42 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.code).toBe('CONFLICT');
     });
 
-    it('POST /api/equipment - 400 Validation Error при некорректных данных (дата в будущем, лишнее поле)', async () => {
+    it('POST /api/equipment - 400 Validation Error при некорректных данных (дата в будущем, некорректный тип)', async () => {
       const invalidData = {
         name: 'AB',
         type: 'unknown_type',
         serialNumber: 'SN-INVALID',
         location: { lat: 100, lon: 37 },
         installedAt: '2099-01-01T00:00:00.000Z',
-        extraField: 'not allowed',
       };
-
 
       const res = await request(app).post('/api/equipment').send(invalidData);
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
       expect(Array.isArray(res.body.error.details)).toBe(true);
       expect(res.body.error.details.length).toBeGreaterThan(0);
+    });
+
+    it('POST /api/equipment - неизвестные поля тела запроса игнорируются (strip) согласно ТЗ', async () => {
+      const dataWithUnknownField = {
+        name: 'Турбина с лишними полями',
+        type: 'turbine',
+        serialNumber: 'SN-EXTRA-002',
+        location: { lat: 55.75, lon: 37.61 },
+        installedAt: '2024-02-01T00:00:00.000Z',
+        id: 'user-defined-id-attempt',
+        createdAt: '1999-01-01T00:00:00.000Z',
+        unexpectedCustomProperty: 'should-be-ignored',
+      };
+
+      const res = await request(app).post('/api/equipment').send(dataWithUnknownField);
+      expect(res.status).toBe(201);
+      expect(res.body.data.id).not.toBe('user-defined-id-attempt');
+      expect(res.body.data.createdAt).not.toBe('1999-01-01T00:00:00.000Z');
+      expect(res.body.data.unexpectedCustomProperty).toBeUndefined();
+
+      // Очищаем созданную единицу
+      await request(app).delete(`/api/equipment/${res.body.data.id}`);
     });
 
     it('GET /api/equipment - получение списка с метаданными пагинации', async () => {
@@ -107,6 +127,20 @@ describe('Equipment Maintenance REST API Tests', () => {
           limit: 10,
         })
       );
+    });
+
+    it('GET /api/equipment - фильтрация по диапазону дат (installedFrom, installedTo)', async () => {
+      const matchRes = await request(app).get(
+        '/api/equipment?installedFrom=2024-01-01T00:00:00.000Z&installedTo=2024-12-31T23:59:59.999Z'
+      );
+      expect(matchRes.status).toBe(200);
+      expect(matchRes.body.data.length).toBe(1);
+
+      const noMatchRes = await request(app).get(
+        '/api/equipment?installedFrom=2025-01-01T00:00:00.000Z'
+      );
+      expect(noMatchRes.status).toBe(200);
+      expect(noMatchRes.body.data.length).toBe(0);
     });
 
     it('GET /api/equipment/:id - получение карточки по ID', async () => {
@@ -153,6 +187,30 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.data.equipmentId).toBe(createdEquipmentId);
 
       createdRequestId = res.body.data.id;
+    });
+
+    it('GET /api/requests - список заявок с пагинацией и фильтрами', async () => {
+      const res = await request(app).get(`/api/requests?equipmentId=${createdEquipmentId}&priority=critical`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBe(1);
+      expect(res.body.meta).toHaveProperty('total', 1);
+    });
+
+    it('GET /api/requests/:id - получение карточки заявки по ID', async () => {
+      const res = await request(app).get(`/api/requests/${createdRequestId}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.id).toBe(createdRequestId);
+      expect(res.body.data.title).toBe('Замена подшипника турбины');
+    });
+
+    it('PATCH /api/requests/:id - редактирование полей заявки', async () => {
+      const res = await request(app)
+        .patch(`/api/requests/${createdRequestId}`)
+        .send({ title: 'Обновленный заголовок заявки' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.title).toBe('Обновленный заголовок заявки');
     });
 
     it('GET /api/equipment/:id/requests - вложенный эндпоинт заявок оборудования', async () => {
@@ -205,9 +263,53 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.code).toBe('CONFLICT');
     });
 
-    it('DELETE /api/equipment/:id - 204 No Content после закрытия всех заявок', async () => {
+    it('DELETE /api/requests/:id - удаление заявки (204 No Content)', async () => {
+      const res = await request(app).delete(`/api/requests/${createdRequestId}`);
+      expect(res.status).toBe(204);
+
+      const checkRes = await request(app).get(`/api/requests/${createdRequestId}`);
+      expect(checkRes.status).toBe(404);
+    });
+
+    it('DELETE /api/equipment/:id - 204 No Content после закрытия/удаления всех заявок', async () => {
       const res = await request(app).delete(`/api/equipment/${createdEquipmentId}`);
       expect(res.status).toBe(204);
+    });
+  });
+
+  describe('4. Weather Endpoint Integration', () => {
+    it('GET /api/equipment/:id/weather - 404 для несуществующего оборудования', async () => {
+      const res = await request(app).get('/api/equipment/00000000-0000-0000-0000-000000000000/weather');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('GET /api/equipment/:id/weather - возвращает прогноз и оценку пригодности для наружных работ', async () => {
+      // Создаем оборудование
+      const equipRes = await request(app).post('/api/equipment').send({
+        name: 'Ветропарк Тестовый Юг',
+        type: 'turbine',
+        serialNumber: 'SN-WEATHER-01',
+        location: { lat: 45.0355, lon: 38.9753 },
+        installedAt: '2023-05-10T00:00:00.000Z',
+      });
+      const equipId = equipRes.body.data.id;
+
+      try {
+        const weatherRes = await request(app).get(`/api/equipment/${equipId}/weather`);
+        // При доступности сети возвращается 200 с прогнозом, при недоступности сети возвращается 502/503/504 без краша сервиса
+        if (weatherRes.status === 200) {
+          expect(weatherRes.body.data).toHaveProperty('equipment');
+          expect(weatherRes.body.data).toHaveProperty('forecast');
+          expect(weatherRes.body.data).toHaveProperty('safetyThresholds');
+          expect(Array.isArray(weatherRes.body.data.forecast)).toBe(true);
+        } else {
+          expect([502, 503, 504]).toContain(weatherRes.status);
+          expect(weatherRes.body).toHaveProperty('error');
+        }
+      } finally {
+        await request(app).delete(`/api/equipment/${equipId}`);
+      }
     });
   });
 });

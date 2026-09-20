@@ -21,6 +21,10 @@ export class RequestService {
             status,
             priority,
             equipmentId,
+            createdFrom,
+            createdTo,
+            plannedFrom,
+            plannedTo,
             sortBy = 'createdAt',
             sortOrder = 'desc',
             page = 1,
@@ -37,6 +41,22 @@ export class RequestService {
         }
         if (equipmentId) {
             items = items.filter((item) => item.equipmentId === equipmentId);
+        }
+        if (createdFrom) {
+            const fromTime = new Date(createdFrom).getTime();
+            items = items.filter((item) => new Date(item.createdAt).getTime() >= fromTime);
+        }
+        if (createdTo) {
+            const toTime = new Date(createdTo).getTime();
+            items = items.filter((item) => new Date(item.createdAt).getTime() <= toTime);
+        }
+        if (plannedFrom) {
+            const fromTime = new Date(plannedFrom).getTime();
+            items = items.filter((item) => item.plannedAt && new Date(item.plannedAt).getTime() >= fromTime);
+        }
+        if (plannedTo) {
+            const toTime = new Date(plannedTo).getTime();
+            items = items.filter((item) => item.plannedAt && new Date(item.plannedAt).getTime() <= toTime);
         }
 
         const total = items.length;
