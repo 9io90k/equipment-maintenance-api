@@ -1,10 +1,5 @@
 import { ValidationError } from '../errors/index.js';
 
-/**
- * Валидирует body, query, params по переданным Zod-схемам.
- * Очищенные и преобразованные данные складываются в req.valid[part].
- * Неизвестные поля отбрасываются либо бракуются согласно z.strictObject().
- */
 export function validate(schemas) {
   return (req, _res, next) => {
     req.valid = req.valid || {};
