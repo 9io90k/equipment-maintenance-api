@@ -32,4 +32,18 @@ export const config = {
   logger: {
     level: process.env.LOG_LEVEL || 'info',
   },
+
+  db: {
+    host: process.env.PGHOST || 'localhost',
+    port: Number(process.env.PGPORT) || 5432,
+    database: process.env.PGDATABASE || 'equipment_db',
+    user: process.env.PGUSER || 'app',
+    password: process.env.PGPASSWORD || '',
+    pool: {
+      max: Number(process.env.DB_POOL_MAX) || 10,
+      min: Number(process.env.DB_POOL_MIN) || 2,
+      acquire: Number(process.env.DB_POOL_ACQUIRE) || 5000,
+      idle: Number(process.env.DB_POOL_IDLE) || 30000,
+    },
+  },
 };
