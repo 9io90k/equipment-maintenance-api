@@ -25,7 +25,7 @@ docker compose down
 npm install
 ```
 
-### 1.3. Миграции и заполнение базы данных (Seeds)
+### 1.3. Миграции, откат и заполнение базы данных (Seeds)
 Применение миграций схемы 3NF:
 ```bash
 npm run db:migrate
@@ -34,7 +34,11 @@ npm run db:migrate
 ```bash
 npm run db:seed
 ```
-Полный сброс и повторный накат базы:
+Откат всех миграций:
+```bash
+npm run db:migrate:undo:all
+```
+Полный сброс и повторный накат базы с сидами:
 ```bash
 npm run db:reset
 ```
@@ -50,7 +54,7 @@ npm start
 ```
 
 ### 1.5. Автоматические тесты (Jest + Supertest)
-Запуск набора из 32 интеграционных тестов:
+Запуск набора из 33 интеграционных тестов:
 ```bash
 npm test
 ```
@@ -63,12 +67,20 @@ npm test
 |---|---|---|
 | `PORT` | `3000` | Порт HTTP-сервера |
 | `NODE_ENV` | `development` | Режим работы (`development` / `production`) |
-| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/equipment_maintenance` | Строка подключения к PostgreSQL |
+| `PGHOST` | `localhost` | Хост СУБД PostgreSQL |
+| `PGPORT` | `5432` | Порт СУБД PostgreSQL |
+| `PGDATABASE` | `equipment_db` | Имя базы данных |
+| `PGUSER` | `app` | Пользователь базы данных |
+| `PGPASSWORD` | `secret` | Пароль пользователя базы данных |
+| `DATABASE_URL` | *(опционально)* | Полная строка подключения (альтернатива PG*) |
 | `DB_POOL_MAX` | `10` | Максимальный размер пула соединений |
 | `DB_POOL_MIN` | `2` | Минимальный размер пула соединений |
+| `DB_POOL_ACQUIRE` | `30000` | Таймаут ожидания соединения из пула (мс) |
+| `DB_POOL_IDLE` | `10000` | Время простоя соединения перед закрытием (мс) |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Разрешённые веб-источники (не разрешённые отклоняются без 500) |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Окно ограничения частоты запросов (мс) |
 | `RATE_LIMIT_MAX` | `100` | Максимальное количество запросов на `/api` в окно |
+| `REQUEST_TIMEOUT_MS` | `5000` | Таймаут обработки входящих HTTP-запросов (мс) |
 | `WEATHER_API_URL` | `https://api.open-meteo.com/v1/forecast` | Внешний API прогноза погоды Open-Meteo |
 | `WEATHER_MAX_WIND_SPEED` | `12.0` | Порог скорости ветра (м/с) для наружных работ |
 | `WEATHER_MAX_PRECIPITATION` | `0.5` | Порог осадков (мм) для наружных работ |
@@ -76,7 +88,7 @@ npm test
 
 ---
 
-## 3. Схема базы данных (3-я нормальная форма)
+## 3. Схема базы данных и обоснование 3-й нормальной формы (3NF)
 
 Схема нормализована до 3NF и включает 7 сущностей:
 
@@ -98,13 +110,25 @@ npm test
                               [ technicians ] (Техники/бригады)
 ```
 
-1. **`sites`**: производственные площадки (ВЭС, СЭС) с географическими координатами и регионами.
-2. **`equipment`**: единицы оборудования с внешним ключом `site_id` и серийным номером.
-3. **`equipment_passports`**: паспорта оборудования (1:1 к `equipment`) с паспортной мощностью (`nominal_power`) и производителем.
-4. **`maintenance_requests`**: заявки на техническое обслуживание с приоритетом, статусом и датами выполнения.
-5. **`technicians`**: персонал инженерно-ремонтных бригад с разрядом квалификации и специализацией.
-6. **`request_assignees`**: таблица-связка M:N между заявками и техниками с фиксацией роли и затраченных часов (`hours`).
-7. **`request_status_history`**: неизменяемый журнал (audit trail) изменения статусов заявок.
+### Обоснование соответствия 3NF:
+1. **1NF (Первая нормальная форма)**:
+   - Все атрибуты содержат атомарные (неделимые) значения.
+   - Отсутствуют повторяющиеся группы и массивы в полях таблиц.
+   - Каждая строка уникально идентифицируется первичным ключом (`UUID`).
+2. **2NF (Вторая нормальная форма)**:
+   - Выполняются условия 1NF.
+   - Все неключевые атрибуты функционально полно зависят от всего первичного ключа целиком (в связующей таблице `request_assignees` составные зависимости устранены отдельным суррогатным ключом `id` и внешними ключами `request_id`, `technician_id`).
+3. **3NF (Третья нормальная форма)**:
+   - Выполняются условия 2NF.
+   - **Устранены транзитивные зависимости**:
+     - Характеристики паспорта оборудования (`nominal_power`, `manufacturer`, `model`) вынесены в отдельную сущность `equipment_passports` (связь 1:1), так как паспортные данные зависят от паспорта, а не напрямую от эксплуатационного состояния оборудования.
+     - Параметры площадки (`name`, `code`, `region`, `coordinates`) вынесены в `sites` (1:N), устраняя дублирование географических метаданных в строках оборудования.
+     - Персонал техников вынесен в `technicians`, а их назначение на заявки с фиксацией роли (`lead` / `member`) и затраченных часов (`hours`) реализовано через связующую сущность `request_assignees` (M:N). Это исключает транзитивную зависимость квалификации техника от заявки.
+     - Аудит изменения состояний заявок вынесен в неизменяемую историческую таблицу `request_status_history`.
+
+### Правила целостности внешних ключей (Foreign Key Constraints):
+- **Защита от случайного удаления (`ON DELETE RESTRICT`)**: Удаление оборудования блокируется на уровне бизнес-логики и базы данных при наличии открытых заявок на обслуживание (возвращается HTTP `409 Conflict`).
+- **Каскадное удаление (`ON DELETE CASCADE`)**: При регламентном удалении оборудования автоматически удаляется его технический паспорт (`equipment_passports`). При удалении заявки каскадно очищаются назначенные исполнители (`request_assignees`) и история смены статусов (`request_status_history`).
 
 ---
 
@@ -117,22 +141,23 @@ npm test
 | `GET` | `/api/health` | Проверка жизнеспособности сервиса | `200` |
 | `GET` | `/api/equipment` | Список оборудования с фильтрами, сортировкой и пагинацией | `200` |
 | `POST` | `/api/equipment` | Регистрация нового оборудования | `201` (Location), `400`, `409` |
-| `GET` | `/api/equipment/:id` | Карточка оборудования | `200`, `400`, `404` |
+| `GET` | `/api/equipment/:id` | Карточка оборудования с паспортом и площадкой | `200`, `400`, `404` |
 | `PATCH` | `/api/equipment/:id` | Редактирование оборудования | `200`, `400`, `404`, `409` |
 | `DELETE` | `/api/equipment/:id` | Удаление оборудования (блокируется при открытых заявках) | `204`, `400`, `404`, `409` |
 | `GET` | `/api/equipment/:id/requests` | Список заявок по конкретному оборудованию | `200`, `400`, `404` |
 | `GET` | `/api/equipment/:id/weather` | Прогноз погоды и допуск к наружным работам | `200`, `400`, `404`, `502-504` |
 | `GET` | `/api/requests` | Реестр заявок с фильтрами по статусу, приоритету и диапазону дат | `200` |
 | `POST` | `/api/requests` | Создание новой заявки (всегда в статусе `new`) | `201` (Location), `400`, `404` |
-| `GET` | `/api/requests/:id` | Карточка заявки | `200`, `400`, `404` |
+| `GET` | `/api/requests/:id` | Карточка заявки с бригадой исполнителей | `200`, `400`, `404` |
 | `PATCH` | `/api/requests/:id` | Редактирование полей заявки | `200`, `400`, `404` |
-| `PATCH` | `/api/requests/:id/status` | Смена статуса заявки с проверкой допустимости переходов | `200`, `400`, `404`, `409` |
-| `POST` | `/api/requests/:id/assignees` | Назначение техника на заявку с учётом трудозатрат | `201`, `400`, `404`, `409` |
+| `PATCH` | `/api/requests/:id/status` | Смена статуса заявки (запрещён `in_progress` без бригады) | `200`, `400`, `404`, `409` |
+| `POST` | `/api/requests/:id/assignees` | Назначение бригады техников (требуется ровно один `lead`) | `201`, `400`, `404`, `409`, `422` |
+| `DELETE` | `/api/requests/:id/assignees/:technicianId` | Снятие техника с заявки | `204`, `400`, `404` |
 | `GET` | `/api/requests/:id/history` | Аудиторский след смены статусов заявки | `200`, `400`, `404` |
 | `DELETE` | `/api/requests/:id` | Удаление заявки | `204`, `400`, `404` |
 | `GET` | `/api/sites` | Список всех производственных площадок | `200` |
 | `GET` | `/api/sites/:id/summary` | Сводка по площадке: суммарная мощность, разбивка по статусам и активным заявкам | `200`, `400`, `404` |
-| `GET` | `/api/reports/maintenance` | **Аналитический Raw SQL отчёт** по трудозатратам бригад и MTTR | `200`, `400` |
+| `GET` | `/api/reports/equipment-load` | **Аналитический Raw SQL отчёт** по нагрузке оборудования с `minRequests` (HAVING) | `200`, `400` |
 
 ---
 
@@ -226,7 +251,9 @@ Content-Type: application/json; charset=utf-8
 
 ---
 
-### 5.3. Назначение техника на заявку (`POST /api/requests/:id/assignees`)
+### 5.3. Назначение бригады техников на заявку (`POST /api/requests/:id/assignees`)
+
+> **Правило бизнес-логики**: В составе бригады исполнителей должен присутствовать **ровно один ведущий специалист (`role: "lead"`)**. При отсутствии `lead` или наличии нескольких `lead` возвращается ошибка `422 Unprocessable Entity`. Назначение производится атомарно: предыдущий состав бригады заменяется новым.
 
 **Запрос:**
 ```http
@@ -235,23 +262,54 @@ Host: localhost:3000
 Content-Type: application/json
 
 {
-  "technicianId": "33333333-3333-4333-8333-333333333001",
-  "role": "lead",
-  "hours": 4.5
+  "assignees": [
+    {
+      "technicianId": "33333333-3333-4333-8333-333333333001",
+      "role": "lead",
+      "hours": 4.5
+    },
+    {
+      "technicianId": "33333333-3333-4333-8333-333333333002",
+      "role": "member",
+      "hours": 2.0
+    }
+  ]
 }
 ```
 
 **Ответ:** `201 Created`
 ```json
 {
-  "data": {
-    "id": "f9a8b7c6-d5e4-4f3a-8b2c-1d0e9f8a7b6c",
-    "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
-    "technicianId": "33333333-3333-4333-8333-333333333001",
-    "role": "lead",
-    "hours": 4.5,
-    "assignedAt": "2026-09-28T12:10:00.000Z"
-  }
+  "data": [
+    {
+      "id": "f9a8b7c6-d5e4-4f3a-8b2c-1d0e9f8a7b6c",
+      "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+      "technicianId": "33333333-3333-4333-8333-333333333001",
+      "role": "lead",
+      "hours": 4.5,
+      "createdAt": "2026-09-28T12:10:00.000Z",
+      "technician": {
+        "id": "33333333-3333-4333-8333-333333333001",
+        "fullName": "Иванов Иван Иванович",
+        "specialization": "Электротехник",
+        "personnelNumber": "TECH-001"
+      }
+    },
+    {
+      "id": "e8d7c6b5-a4f3-4e2d-9c1b-0a9f8e7d6c5b",
+      "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+      "technicianId": "33333333-3333-4333-8333-333333333002",
+      "role": "member",
+      "hours": 2.0,
+      "createdAt": "2026-09-28T12:10:00.000Z",
+      "technician": {
+        "id": "33333333-3333-4333-8333-333333333002",
+        "fullName": "Петров Петр Сергеевич",
+        "specialization": "Механик ветрогенераторов",
+        "personnelNumber": "TECH-002"
+      }
+    }
+  ]
 }
 ```
 
@@ -329,7 +387,20 @@ Host: localhost:3000
         "wind_turbine": 2,
         "substation": 1
       },
-      "activeRequestsCount": 6
+      "activeRequestsCount": 6,
+      "requestsByStatus": {
+        "new": 2,
+        "in_progress": 4,
+        "done": 5,
+        "rejected": 1
+      },
+      "requestsByPriority": {
+        "low": 2,
+        "medium": 4,
+        "high": 4,
+        "critical": 2
+      },
+      "avgResolutionTimeHours": 4.5
     }
   }
 }
@@ -337,11 +408,13 @@ Host: localhost:3000
 
 ---
 
-### 5.6. Аналитический Raw SQL отчёт по ТО и MTTR (`GET /api/reports/maintenance`)
+### 5.6. Аналитический Raw SQL отчёт по нагрузке оборудования (`GET /api/reports/equipment-load`)
+
+> **Запрос**: группировка по каждой единице оборудования с вычислением общего числа заявок, выполненных ремонтов, плановых трудозатрат бригад, даты последнего обслуживания и среднего времени восстановления (MTTR). Поддерживает фильтрацию групп через предложение `HAVING COUNT(mr.id) >= :minRequests`.
 
 **Запрос:**
 ```http
-GET /api/reports/maintenance?siteId=11111111-1111-4111-8111-111111111001 HTTP/1.1
+GET /api/reports/equipment-load?minRequests=2 HTTP/1.1
 Host: localhost:3000
 ```
 
@@ -354,41 +427,31 @@ Host: localhost:3000
       "endDate": null
     },
     "filters": {
-      "siteId": "11111111-1111-4111-8111-111111111001"
+      "siteId": null,
+      "minRequests": 2
     },
     "overall": {
-      "totalEquipment": 3,
-      "totalRequests": 10,
-      "completedRequests": 4,
+      "totalEquipment": 4,
+      "totalRequests": 12,
+      "closedRequests": 6,
       "activeRequests": 6,
-      "rejectedRequests": 0,
-      "totalTechnicianHours": 24.5
+      "totalPlannedHours": 32.5,
+      "overallAvgResolutionHours": 4.85
     },
     "breakdown": [
       {
-        "siteId": "11111111-1111-4111-8111-111111111001",
-        "siteName": "Ветропарк Северный",
-        "siteCode": "SITE-WIND-01",
-        "equipmentType": "substation",
-        "equipmentCount": 1,
-        "totalRequests": 2,
-        "completedRequests": 1,
-        "activeRequests": 1,
-        "rejectedRequests": 0,
-        "totalTechnicianHours": 5.0,
-        "avgResolutionTimeHours": 3.8
-      },
-      {
-        "siteId": "11111111-1111-4111-8111-111111111001",
-        "siteName": "Ветропарк Северный",
-        "siteCode": "SITE-WIND-01",
+        "equipmentId": "22222222-2222-4222-8222-222222222001",
+        "equipmentName": "Ветрогенератор ВЭУ-01",
+        "serialNumber": "WT-2023-001",
         "equipmentType": "wind_turbine",
-        "equipmentCount": 2,
-        "totalRequests": 8,
-        "completedRequests": 3,
-        "activeRequests": 5,
-        "rejectedRequests": 0,
-        "totalTechnicianHours": 19.5,
+        "siteId": "11111111-1111-4111-8111-111111111001",
+        "siteName": "Ветропарк Северный",
+        "siteCode": "SITE-WIND-01",
+        "totalRequests": 4,
+        "closedRequests": 2,
+        "activeRequests": 2,
+        "totalPlannedHours": 14.0,
+        "lastMaintenanceDate": "2026-06-15T14:30:00.000Z",
         "avgResolutionTimeHours": 5.2
       }
     ]
@@ -399,6 +462,28 @@ Host: localhost:3000
 ---
 
 ### 5.7. Примеры ошибок
+
+#### 422 Unprocessable Entity (Бригада без ведущего специалиста)
+```json
+{
+  "error": {
+    "code": "UNPROCESSABLE_ENTITY",
+    "message": "В составе бригады должен быть назначен ровно один ведущий специалист (lead)",
+    "requestId": "3a2b1c0d-9e8f-7a6b-5c4d-3e2f1a0b9c8d"
+  }
+}
+```
+
+#### 409 Conflict (Попытка перехода в in_progress без бригады)
+```json
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Невозможно перевести заявку в статус \"in_progress\" без назначенных исполнителей",
+    "requestId": "7e6d5c4b-3a21-0987-6543-210fedcba987"
+  }
+}
+```
 
 #### 400 Validation Error (Отрицательные часы или невалидная схема)
 ```json
