@@ -31,53 +31,23 @@ export class RequestService {
             limit = 10,
         } = query;
 
-        let items = await this.reqRepo.findAll();
-
-        if (status) {
-            items = items.filter((item) => item.status === status);
-        }
-        if (priority) {
-            items = items.filter((item) => item.priority === priority);
-        }
-        if (equipmentId) {
-            items = items.filter((item) => item.equipmentId === equipmentId);
-        }
-        if (createdFrom) {
-            const fromTime = new Date(createdFrom).getTime();
-            items = items.filter((item) => new Date(item.createdAt).getTime() >= fromTime);
-        }
-        if (createdTo) {
-            const toTime = new Date(createdTo).getTime();
-            items = items.filter((item) => new Date(item.createdAt).getTime() <= toTime);
-        }
-        if (plannedFrom) {
-            const fromTime = new Date(plannedFrom).getTime();
-            items = items.filter((item) => item.plannedAt && new Date(item.plannedAt).getTime() >= fromTime);
-        }
-        if (plannedTo) {
-            const toTime = new Date(plannedTo).getTime();
-            items = items.filter((item) => item.plannedAt && new Date(item.plannedAt).getTime() <= toTime);
-        }
-
-        const total = items.length;
-
-        items.sort((a, b) => {
-            let valA = a[sortBy] ?? '';
-            let valB = b[sortBy] ?? '';
-
-            if (typeof valA === 'string') valA = valA.toLowerCase();
-            if (typeof valB === 'string') valB = valB.toLowerCase();
-
-            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-            return 0;
+        const offset = (page - 1) * limit;
+        const { items, total } = await this.reqRepo.findAndCountAll({
+            status,
+            priority,
+            equipmentId,
+            createdFrom,
+            createdTo,
+            plannedFrom,
+            plannedTo,
+            sortBy,
+            sortOrder,
+            limit,
+            offset,
         });
 
-        const startIndex = (page - 1) * limit;
-        const paginatedItems = items.slice(startIndex, startIndex + limit);
-
         return {
-            data: paginatedItems,
+            data: items,
             meta: {
                 total,
                 page,
@@ -116,7 +86,7 @@ export class RequestService {
             title: data.title,
             description: data.description || '',
             priority: data.priority,
-            status: data.status || 'new',
+            status: 'new',
             plannedAt: data.plannedAt || null,
             createdAt: now,
             updatedAt: now,
@@ -130,7 +100,7 @@ export class RequestService {
         return await this.reqRepo.update(id, patch);
     }
 
-    async updateStatus(id, newStatus) {
+    async updateStatus(id, newStatus, changedBy = 'system', comment = null) {
         const current = await this.getById(id);
 
         const allowed = ALLOWED_TRANSITIONS[current.status] || [];
@@ -141,7 +111,7 @@ export class RequestService {
             );
         }
 
-        return await this.reqRepo.update(id, { status: newStatus });
+        return await this.reqRepo.update(id, { status: newStatus }, { changedBy, comment });
     }
 
     async delete(id) {

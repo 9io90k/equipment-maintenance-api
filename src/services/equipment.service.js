@@ -28,50 +28,22 @@ export class EquipmentService {
       limit = 10,
     } = query;
 
-    let items = await this.repo.findAll();
+    const offset = (page - 1) * limit;
 
-    if (status) {
-      items = items.filter((item) => item.status === status);
-    }
-    if (type) {
-      items = items.filter((item) => item.type === type);
-    }
-    if (search) {
-      const searchLower = search.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchLower) ||
-          item.serialNumber.toLowerCase().includes(searchLower)
-      );
-    }
-    if (installedFrom) {
-      const fromTime = new Date(installedFrom).getTime();
-      items = items.filter((item) => new Date(item.installedAt).getTime() >= fromTime);
-    }
-    if (installedTo) {
-      const toTime = new Date(installedTo).getTime();
-      items = items.filter((item) => new Date(item.installedAt).getTime() <= toTime);
-    }
-
-    const total = items.length;
-
-    items.sort((a, b) => {
-      let valA = a[sortBy] ?? '';
-      let valB = b[sortBy] ?? '';
-
-      if (typeof valA === 'string') valA = valA.toLowerCase();
-      if (typeof valB === 'string') valB = valB.toLowerCase();
-
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
+    const { items, total } = await this.repo.findAndCountAll({
+      status,
+      type,
+      search,
+      installedFrom,
+      installedTo,
+      sortBy,
+      sortOrder,
+      limit,
+      offset,
     });
 
-    const startIndex = (page - 1) * limit;
-    const paginatedItems = items.slice(startIndex, startIndex + limit);
-
     return {
-      data: paginatedItems,
+      data: items,
       meta: {
         total,
         page,
