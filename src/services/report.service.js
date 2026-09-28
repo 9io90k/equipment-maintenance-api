@@ -2,37 +2,52 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../lib/db.js';
 
 export class ReportService {
-  async getMaintenanceReport({ startDate = null, endDate = null, siteId = null } = {}) {
+  async getEquipmentLoadReport({ startDate = null, endDate = null, siteId = null, minRequests = null } = {}) {
     const sql = `
+      WITH request_stats AS (
+        SELECT 
+          mr.id,
+          mr.equipment_id,
+          mr.status,
+          mr.created_at,
+          mr.closed_at,
+          COALESCE(SUM(ra.hours), 0) AS planned_hours
+        FROM maintenance_requests mr
+        LEFT JOIN request_assignees ra ON ra.request_id = mr.id
+        WHERE (:startDate::timestamptz IS NULL OR mr.created_at >= :startDate::timestamptz)
+          AND (:endDate::timestamptz IS NULL OR mr.created_at <= :endDate::timestamptz)
+        GROUP BY mr.id, mr.equipment_id, mr.status, mr.created_at, mr.closed_at
+      )
       SELECT 
+        e.id AS "equipmentId",
+        e.name AS "equipmentName",
+        e.serial_number AS "serialNumber",
+        e.type AS "equipmentType",
         s.id AS "siteId",
         s.name AS "siteName",
         s.code AS "siteCode",
-        e.type AS "equipmentType",
-        COUNT(DISTINCT e.id)::int AS "equipmentCount",
-        COUNT(DISTINCT mr.id)::int AS "totalRequests",
-        COUNT(DISTINCT CASE WHEN mr.status = 'done' THEN mr.id END)::int AS "completedRequests",
-        COUNT(DISTINCT CASE WHEN mr.status IN ('new', 'in_progress') THEN mr.id END)::int AS "activeRequests",
-        COUNT(DISTINCT CASE WHEN mr.status = 'rejected' THEN mr.id END)::int AS "rejectedRequests",
-        COALESCE(ROUND(SUM(ra.hours)::numeric, 2), 0.00)::float AS "totalTechnicianHours",
+        COUNT(rs.id)::int AS "totalRequests",
+        COUNT(CASE WHEN rs.status = 'done' THEN rs.id END)::int AS "closedRequests",
+        COUNT(CASE WHEN rs.status IN ('new', 'in_progress') THEN rs.id END)::int AS "activeRequests",
+        COALESCE(ROUND(SUM(rs.planned_hours)::numeric, 2), 0.00)::float AS "totalPlannedHours",
+        MAX(rs.closed_at) AS "lastMaintenanceDate",
         COALESCE(
           ROUND(
             AVG(
-              EXTRACT(EPOCH FROM (mr.closed_at - mr.created_at)) / 3600
+              CASE WHEN rs.status = 'done' AND rs.closed_at IS NOT NULL 
+              THEN EXTRACT(EPOCH FROM (rs.closed_at - rs.created_at)) / 3600 END
             )::numeric, 
             2
           ), 
           0.00
         )::float AS "avgResolutionTimeHours"
-      FROM sites s
-      JOIN equipment e ON e.site_id = s.id
-      LEFT JOIN maintenance_requests mr ON mr.equipment_id = e.id
-        AND (:startDate::timestamptz IS NULL OR mr.created_at >= :startDate::timestamptz)
-        AND (:endDate::timestamptz IS NULL OR mr.created_at <= :endDate::timestamptz)
-      LEFT JOIN request_assignees ra ON ra.request_id = mr.id
+      FROM equipment e
+      JOIN sites s ON s.id = e.site_id
+      LEFT JOIN request_stats rs ON rs.equipment_id = e.id
       WHERE (:siteId::uuid IS NULL OR s.id = :siteId::uuid)
-      GROUP BY s.id, s.name, s.code, e.type
-      ORDER BY s.name ASC, e.type ASC;
+      GROUP BY e.id, e.name, e.serial_number, e.type, s.id, s.name, s.code
+      HAVING (:minRequests::int IS NULL OR COUNT(rs.id) >= :minRequests::int)
+      ORDER BY "totalRequests" DESC, e.name ASC;
     `;
 
     const rows = await sequelize.query(sql, {
@@ -41,28 +56,26 @@ export class ReportService {
         startDate: startDate ? new Date(startDate).toISOString() : null,
         endDate: endDate ? new Date(endDate).toISOString() : null,
         siteId: siteId || null,
+        minRequests: minRequests !== null && minRequests !== undefined ? Number(minRequests) : null,
       },
     });
 
     const overall = {
-      totalEquipment: 0,
+      totalEquipment: rows.length,
       totalRequests: 0,
-      completedRequests: 0,
+      closedRequests: 0,
       activeRequests: 0,
-      rejectedRequests: 0,
-      totalTechnicianHours: 0,
+      totalPlannedHours: 0,
     };
 
     for (const r of rows) {
-      overall.totalEquipment += r.equipmentCount;
       overall.totalRequests += r.totalRequests;
-      overall.completedRequests += r.completedRequests;
+      overall.closedRequests += r.closedRequests;
       overall.activeRequests += r.activeRequests;
-      overall.rejectedRequests += r.rejectedRequests;
-      overall.totalTechnicianHours += r.totalTechnicianHours;
+      overall.totalPlannedHours += r.totalPlannedHours;
     }
 
-    overall.totalTechnicianHours = Number(overall.totalTechnicianHours.toFixed(2));
+    overall.totalPlannedHours = Number(overall.totalPlannedHours.toFixed(2));
 
     return {
       period: {
@@ -71,10 +84,15 @@ export class ReportService {
       },
       filters: {
         siteId,
+        minRequests,
       },
       overall,
       breakdown: rows,
     };
+  }
+
+  async getMaintenanceReport(params) {
+    return this.getEquipmentLoadReport(params);
   }
 }
 

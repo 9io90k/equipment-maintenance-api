@@ -5,9 +5,13 @@ export class ReportController {
     this.service = service;
   }
 
-  getMaintenanceReport = async (req, res) => {
-    const report = await this.service.getMaintenanceReport(req.valid.query);
+  getEquipmentLoadReport = async (req, res) => {
+    const report = await this.service.getEquipmentLoadReport(req.valid.query);
     return res.status(200).json({ data: report });
+  };
+
+  getMaintenanceReport = async (req, res) => {
+    return this.getEquipmentLoadReport(req, res);
   };
 }
 
