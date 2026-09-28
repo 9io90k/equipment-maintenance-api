@@ -55,3 +55,9 @@ export const queryRequestSchema = z.object({
 export const updateRequestStatusSchema = z.object({
     status: z.enum(requestStatuses),
 });
+
+export const addAssigneeSchema = z.object({
+    technicianId: z.string().uuid('technicianId должен быть валидным UUID'),
+    role: z.enum(['lead', 'member']).default('member'),
+    hours: z.coerce.number().min(0, 'Количество часов не может быть отрицательным').default(0),
+});

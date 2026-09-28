@@ -118,6 +118,19 @@ export class RequestService {
         await this.getById(id);
         await this.reqRepo.delete(id);
     }
+
+    async getStatusHistory(id) {
+        await this.getById(id);
+        return await this.reqRepo.getStatusHistory(id);
+    }
+    async addAssignee(id, { technicianId, role = 'member', hours = 0.0 }) {
+        await this.getById(id);
+        const technician = await this.reqRepo.findTechnicianById(technicianId);
+        if (!technician) {
+            throw new NotFoundError(`Техник с ID "${technicianId}" не найден`);
+        }
+        return await this.reqRepo.addAssignee(id, { technicianId, role, hours });
+    }
 }
 
 export const requestService = new RequestService();

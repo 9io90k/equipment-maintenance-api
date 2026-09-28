@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { MaintenanceRequest, Equipment, RequestStatusHistory, Technician } from '../models/index.js';
+import { MaintenanceRequest, Equipment, RequestStatusHistory, Technician, RequestAssignee } from '../models/index.js';
 import { sequelize } from '../lib/db.js';
 
 export class RequestRepository {
@@ -150,6 +150,32 @@ export class RequestRepository {
   async delete(id) {
     const deletedCount = await MaintenanceRequest.destroy({ where: { id } });
     return deletedCount > 0;
+  }
+
+  async getStatusHistory(requestId) {
+    const history = await RequestStatusHistory.findAll({
+      where: { requestId },
+      order: [['createdAt', 'ASC']],
+    });
+    return history.map((h) => h.toJSON());
+  }
+  async addAssignee(requestId, { technicianId, role = 'member', hours = 0.0 }) {
+    const [assignee, created] = await RequestAssignee.findOrCreate({
+      where: { requestId, technicianId },
+      defaults: { role, hours },
+    });
+    if (!created) {
+      await assignee.update({
+        role,
+        hours: Number(assignee.hours) + Number(hours),
+      });
+    }
+    return assignee.toJSON();
+  }
+
+  async findTechnicianById(id) {
+    const tech = await Technician.findByPk(id);
+    return tech ? tech.toJSON() : null;
   }
 }
 

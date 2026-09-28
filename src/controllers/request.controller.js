@@ -40,6 +40,15 @@ export class RequestController {
     const items = await this.service.getByEquipmentId(req.valid.params.id);
     return res.status(200).json({ data: items });
   };
+
+  getStatusHistory = async (req, res) => {
+    const history = await this.service.getStatusHistory(req.valid.params.id);
+    return res.status(200).json({ data: history });
+  };
+  addAssignee = async (req, res) => {
+    const assignee = await this.service.addAssignee(req.valid.params.id, req.valid.body);
+    return res.status(201).json({ data: assignee });
+  };
 }
 
 export const requestController = new RequestController();
