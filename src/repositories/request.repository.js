@@ -1,99 +1,156 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { getLog } from '../lib/context.js';
-
-const DATA_DIR = path.resolve('data');
-const DATA_FILE = path.join(DATA_DIR, 'requests.json');
+import { Op } from 'sequelize';
+import { MaintenanceRequest, Equipment, RequestStatusHistory, Technician } from '../models/index.js';
+import { sequelize } from '../lib/db.js';
 
 export class RequestRepository {
-    constructor() {
-        this.items = [];
-        this.isLoaded = false;
+  async findAndCountAll({
+    status,
+    priority,
+    equipmentId,
+    createdFrom,
+    createdTo,
+    plannedFrom,
+    plannedTo,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    limit = 10,
+    offset = 0,
+  } = {}) {
+    const where = {};
+    if (status) where.status = status;
+    if (priority) where.priority = priority;
+    if (equipmentId) where.equipmentId = equipmentId;
+
+    if (createdFrom || createdTo) {
+      where.createdAt = {};
+      if (createdFrom) where.createdAt[Op.gte] = new Date(createdFrom);
+      if (createdTo) where.createdAt[Op.lte] = new Date(createdTo);
     }
 
-    async init() {
-        if (this.isLoaded) return;
-        try {
-            await fs.mkdir(DATA_DIR, { recursive: true });
-            const content = await fs.readFile(DATA_FILE, 'utf-8');
-            this.items = JSON.parse(content);
-        } catch (err) {
-            if (err.code === 'ENOENT') {
-                this.items = [];
-                await this.persist();
-            } else {
-                getLog().error({ err }, 'Ошибка чтения data/requests.json');
-                this.items = [];
-            }
-        }
-        this.isLoaded = true;
+    if (plannedFrom || plannedTo) {
+      where.plannedAt = {};
+      if (plannedFrom) where.plannedAt[Op.gte] = new Date(plannedFrom);
+      if (plannedTo) where.plannedAt[Op.lte] = new Date(plannedTo);
     }
 
-    async persist() {
-        try {
-            await fs.writeFile(DATA_FILE, JSON.stringify(this.items, null, 2), 'utf-8');
-        } catch (err) {
-            getLog().error({ err }, 'Ошибка записи в data/requests.json');
-        }
-    }
+    const { rows, count } = await MaintenanceRequest.findAndCountAll({
+      where,
+      limit,
+      offset,
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      include: [
+        { model: Equipment, as: 'equipment' },
+        { model: RequestStatusHistory, as: 'statusHistory' },
+        { model: Technician, as: 'assignees' },
+      ],
+    });
 
-    async findAll() {
-        await this.init();
-        return [...this.items];
-    }
+    return {
+      items: rows.map((r) => r.toJSON()),
+      total: count,
+    };
+  }
 
-    async findById(id) {
-        await this.init();
-        return this.items.find((item) => item.id === id) || null;
-    }
+  async findAll() {
+    const items = await MaintenanceRequest.findAll({
+      include: [
+        { model: Equipment, as: 'equipment' },
+        { model: RequestStatusHistory, as: 'statusHistory' },
+        { model: Technician, as: 'assignees' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+    return items.map((r) => r.toJSON());
+  }
 
-    async findByEquipmentId(equipmentId) {
-        await this.init();
-        return this.items.filter((item) => item.equipmentId === equipmentId);
-    }
+  async findById(id) {
+    const item = await MaintenanceRequest.findByPk(id, {
+      include: [
+        { model: Equipment, as: 'equipment' },
+        { model: RequestStatusHistory, as: 'statusHistory' },
+        { model: Technician, as: 'assignees' },
+      ],
+    });
+    return item ? item.toJSON() : null;
+  }
 
-    async findActiveByEquipmentId(equipmentId) {
-        await this.init();
-        const activeStatuses = ['new', 'in_progress'];
-        return this.items.filter(
-            (item) => item.equipmentId === equipmentId && activeStatuses.includes(item.status)
+  async findByEquipmentId(equipmentId) {
+    const items = await MaintenanceRequest.findAll({
+      where: { equipmentId },
+      include: [
+        { model: RequestStatusHistory, as: 'statusHistory' },
+        { model: Technician, as: 'assignees' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+    return items.map((r) => r.toJSON());
+  }
+
+  async findActiveByEquipmentId(equipmentId) {
+    const items = await MaintenanceRequest.findAll({
+      where: {
+        equipmentId,
+        status: { [Op.in]: ['new', 'in_progress'] },
+      },
+    });
+    return items.map((r) => r.toJSON());
+  }
+
+  async create(data) {
+    return await sequelize.transaction(async (t) => {
+      const request = await MaintenanceRequest.create(data, { transaction: t });
+
+      await RequestStatusHistory.create(
+        {
+          requestId: request.id,
+          previousStatus: null,
+          newStatus: request.status || 'new',
+          changedBy: data.author || 'system',
+          comment: 'Создание заявки на обслуживание',
+        },
+        { transaction: t }
+      );
+
+      return request.toJSON();
+    });
+  }
+
+  async update(id, patch, { changedBy = 'system', comment = null } = {}) {
+    return await sequelize.transaction(async (t) => {
+      const request = await MaintenanceRequest.findByPk(id, { transaction: t });
+      if (!request) return null;
+
+      const previousStatus = request.status;
+      const statusChanged = patch.status && patch.status !== previousStatus;
+
+      const updateData = { ...patch };
+      if (patch.status && ['done', 'rejected'].includes(patch.status) && !patch.closedAt) {
+        updateData.closedAt = new Date();
+      }
+
+      await request.update(updateData, { transaction: t });
+
+      if (statusChanged) {
+        await RequestStatusHistory.create(
+          {
+            requestId: id,
+            previousStatus,
+            newStatus: patch.status,
+            changedBy,
+            comment,
+          },
+          { transaction: t }
         );
-    }
+      }
 
-    async create(data) {
-        await this.init();
-        this.items.push(data);
-        await this.persist();
-        return { ...data };
-    }
+      return request.toJSON();
+    });
+  }
 
-    async update(id, patch) {
-        await this.init();
-        const index = this.items.findIndex((item) => item.id === id);
-        if (index === -1) return null;
-
-        this.items[index] = {
-            ...this.items[index],
-            ...patch,
-            id: this.items[index].id,
-            equipmentId: this.items[index].equipmentId,
-            createdAt: this.items[index].createdAt,
-            updatedAt: new Date().toISOString(),
-        };
-
-        await this.persist();
-        return { ...this.items[index] };
-    }
-
-    async delete(id) {
-        await this.init();
-        const index = this.items.findIndex((item) => item.id === id);
-        if (index === -1) return false;
-
-        this.items.splice(index, 1);
-        await this.persist();
-        return true;
-    }
+  async delete(id) {
+    const deletedCount = await MaintenanceRequest.destroy({ where: { id } });
+    return deletedCount > 0;
+  }
 }
 
-export const requestRepository = new RequestRepository();
+export const requestRepository = new RequestRepository();

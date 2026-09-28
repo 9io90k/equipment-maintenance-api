@@ -1,89 +1,94 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { getLog } from '../lib/context.js';
-
-const DATA_DIR = path.resolve('data');
-const DATA_FILE = path.join(DATA_DIR, 'equipment.json');
+import { Op } from 'sequelize';
+import { Equipment, Site, EquipmentPassport } from '../models/index.js';
 
 export class EquipmentRepository {
-  constructor() {
-    this.items = [];
-    this.isLoaded = false;
-  }
+  async findAndCountAll({
+    status,
+    type,
+    search,
+    installedFrom,
+    installedTo,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    limit = 10,
+    offset = 0,
+  } = {}) {
+    const where = {};
+    if (status) where.status = status;
+    if (type) where.type = type;
 
-  async init() {
-    if (this.isLoaded) return;
-    try {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      const content = await fs.readFile(DATA_FILE, 'utf-8');
-      this.items = JSON.parse(content);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        this.items = [];
-        await this.persist();
-      } else {
-        getLog().error({ err }, 'Ошибка чтения data/equipment.json');
-        this.items = [];
-      }
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { serialNumber: { [Op.iLike]: `%${search}%` } },
+      ];
     }
-    this.isLoaded = true;
-  }
 
-  async persist() {
-    try {
-      await fs.writeFile(DATA_FILE, JSON.stringify(this.items, null, 2), 'utf-8');
-    } catch (err) {
-      getLog().error({ err }, 'Ошибка сохранения в data/equipment.json');
+    if (installedFrom || installedTo) {
+      where.installedAt = {};
+      if (installedFrom) where.installedAt[Op.gte] = new Date(installedFrom);
+      if (installedTo) where.installedAt[Op.lte] = new Date(installedTo);
     }
+
+    const { rows, count } = await Equipment.findAndCountAll({
+      where,
+      limit,
+      offset,
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      include: [
+        { model: Site, as: 'site' },
+        { model: EquipmentPassport, as: 'passport' },
+      ],
+    });
+
+    return {
+      items: rows.map((r) => r.toJSON()),
+      total: count,
+    };
   }
 
   async findAll() {
-    await this.init();
-    return [...this.items];
+    const items = await Equipment.findAll({
+      include: [
+        { model: Site, as: 'site' },
+        { model: EquipmentPassport, as: 'passport' },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+    return items.map((item) => item.toJSON());
   }
 
   async findById(id) {
-    await this.init();
-    return this.items.find((item) => item.id === id) || null;
+    const item = await Equipment.findByPk(id, {
+      include: [
+        { model: Site, as: 'site' },
+        { model: EquipmentPassport, as: 'passport' },
+      ],
+    });
+    return item ? item.toJSON() : null;
   }
 
   async findBySerialNumber(serialNumber) {
-    await this.init();
-    return this.items.find((item) => item.serialNumber === serialNumber) || null;
+    const item = await Equipment.findOne({ where: { serialNumber } });
+    return item ? item.toJSON() : null;
   }
 
   async create(data) {
-    await this.init();
-    this.items.push(data);
-    await this.persist();
-    return { ...data };
+    const created = await Equipment.create(data);
+    return created.toJSON();
   }
 
   async update(id, patch) {
-    await this.init();
-    const index = this.items.findIndex((item) => item.id === id);
-    if (index === -1) return null;
-
-    this.items[index] = {
-      ...this.items[index],
-      ...patch,
-      id: this.items[index].id,
-      createdAt: this.items[index].createdAt,
-      updatedAt: new Date().toISOString(),
-    };
-
-    await this.persist();
-    return { ...this.items[index] };
+    const item = await Equipment.findByPk(id);
+    if (!item) return null;
+    await item.update(patch);
+    return item.toJSON();
   }
 
   async delete(id) {
-    await this.init();
-    const index = this.items.findIndex((item) => item.id === id);
-    if (index === -1) return false;
-
-    this.items.splice(index, 1);
-    await this.persist();
-    return true;
+    const deletedCount = await Equipment.destroy({ where: { id } });
+    return deletedCount > 0;
   }
 }
+
 export const equipmentRepository = new EquipmentRepository();
