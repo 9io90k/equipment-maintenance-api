@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { requestRepository } from '../repositories/request.repository.js';
 import { equipmentRepository } from '../repositories/equipment.repository.js';
-import { NotFoundError, ConflictError } from '../errors/index.js';
+import { NotFoundError, ConflictError, UnprocessableEntityError } from '../errors/index.js';
 
 const ALLOWED_TRANSITIONS = {
     new: ['in_progress', 'rejected'],
@@ -111,6 +111,15 @@ export class RequestService {
             );
         }
 
+        if (newStatus === 'in_progress') {
+            const assigneesCount = await this.reqRepo.countAssignees(id);
+            if (assigneesCount === 0) {
+                throw new ConflictError(
+                    'Невозможно перевести заявку в статус in_progress без назначенных исполнителей'
+                );
+            }
+        }
+
         return await this.reqRepo.update(id, { status: newStatus }, { changedBy, comment });
     }
 
@@ -123,13 +132,42 @@ export class RequestService {
         await this.getById(id);
         return await this.reqRepo.getStatusHistory(id);
     }
-    async addAssignee(id, { technicianId, role = 'member', hours = 0.0 }) {
+
+    async setAssignees(id, body) {
         await this.getById(id);
-        const technician = await this.reqRepo.findTechnicianById(technicianId);
-        if (!technician) {
-            throw new NotFoundError(`Техник с ID "${technicianId}" не найден`);
+
+        const assignees = body.assignees || (Array.isArray(body) ? body : [body]);
+
+        const leads = assignees.filter((a) => a.role === 'lead');
+        if (leads.length !== 1) {
+            throw new UnprocessableEntityError(
+                'Бригада должна содержать ровно одного ведущего специалиста (lead)'
+            );
         }
-        return await this.reqRepo.addAssignee(id, { technicianId, role, hours });
+
+        const techIds = assignees.map((a) => a.technicianId);
+        if (new Set(techIds).size !== techIds.length) {
+            throw new ConflictError('Повторное назначение специалиста в бригаду недопустимо');
+        }
+
+        for (const a of assignees) {
+            const technician = await this.reqRepo.findTechnicianById(a.technicianId);
+            if (!technician) {
+                throw new NotFoundError(`Техник с ID "${a.technicianId}" не найден`);
+            }
+        }
+
+        const result = await this.reqRepo.setAssignees(id, assignees);
+        return result;
+    }
+
+    async removeAssignee(id, technicianId) {
+        await this.getById(id);
+        const assigned = await this.reqRepo.findAssignee(id, technicianId);
+        if (!assigned) {
+            throw new NotFoundError(`Специалист с ID "${technicianId}" не назначен на данную заявку`);
+        }
+        await this.reqRepo.removeAssignee(id, technicianId);
     }
 }
 

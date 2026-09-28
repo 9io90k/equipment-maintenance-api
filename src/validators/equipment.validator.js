@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-const equipmentTypes = ['turbine', 'inverter', 'sensor', 'substation'];
-const equipmentStatuses = ['operational', 'maintenance', 'fault', 'decommissioned'];
+const equipmentTypes = ['turbine', 'wind_turbine', 'solar_panel', 'inverter', 'sensor', 'substation'];
+const equipmentStatuses = ['operational', 'maintenance', 'under_maintenance', 'fault', 'decommissioned'];
 
 const pastOrPresentIsoDate = z.string().refine(
   (val) => {

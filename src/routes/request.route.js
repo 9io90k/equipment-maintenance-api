@@ -6,8 +6,9 @@ import {
   updateRequestSchema,
   updateRequestStatusSchema,
   requestIdParamSchema,
+  removeAssigneeParamSchema,
   queryRequestSchema,
-  addAssigneeSchema,
+  assignBrigadeSchema,
 } from '../validators/request.validator.js';
 
 const router = Router();
@@ -35,10 +36,17 @@ router.get(
   validate({ params: requestIdParamSchema }),
   requestController.getStatusHistory
 );
+
 router.post(
   '/:id/assignees',
-  validate({ params: requestIdParamSchema, body: addAssigneeSchema }),
-  requestController.addAssignee
+  validate({ params: requestIdParamSchema, body: assignBrigadeSchema }),
+  requestController.setAssignees
+);
+
+router.delete(
+  '/:id/assignees/:technicianId',
+  validate({ params: removeAssigneeParamSchema }),
+  requestController.removeAssignee
 );
 
 export default router;

@@ -30,6 +30,11 @@ export const requestIdParamSchema = z.object({
     id: z.string().uuid('Идентификатор заявки должен быть валидным UUID'),
 });
 
+export const removeAssigneeParamSchema = z.object({
+    id: z.string().uuid('Идентификатор заявки должен быть валидным UUID'),
+    technicianId: z.string().uuid('Идентификатор техника должен быть валидным UUID'),
+});
+
 export const queryRequestSchema = z.object({
     status: z.enum(requestStatuses).optional(),
     equipmentId: z.string().uuid('Идентификатор оборудования должен быть валидным UUID').optional(),
@@ -56,8 +61,22 @@ export const updateRequestStatusSchema = z.object({
     status: z.enum(requestStatuses),
 });
 
-export const addAssigneeSchema = z.object({
+export const singleAssigneeSchema = z.object({
     technicianId: z.string().uuid('technicianId должен быть валидным UUID'),
     role: z.enum(['lead', 'member']).default('member'),
     hours: z.coerce.number().min(0, 'Количество часов не может быть отрицательным').default(0),
 });
+
+export const assignBrigadeSchema = z.preprocess(
+    (val) => {
+        if (Array.isArray(val)) return { assignees: val };
+        if (val && Array.isArray(val.assignees)) return val;
+        if (val && typeof val === 'object' && val.technicianId) return { assignees: [val] };
+        return val;
+    },
+    z.object({
+        assignees: z.array(singleAssigneeSchema).min(1, 'Бригада должна содержать хотя бы одного специалиста'),
+    })
+);
+
+export const addAssigneeSchema = assignBrigadeSchema;

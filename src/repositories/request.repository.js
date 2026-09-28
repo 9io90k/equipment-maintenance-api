@@ -2,6 +2,20 @@ import { Op } from 'sequelize';
 import { MaintenanceRequest, Equipment, RequestStatusHistory, Technician, RequestAssignee } from '../models/index.js';
 import { sequelize } from '../lib/db.js';
 
+const REQUEST_ATTRIBUTES = [
+  'id',
+  'equipmentId',
+  'title',
+  'description',
+  'priority',
+  'status',
+  'author',
+  'plannedAt',
+  'closedAt',
+  'createdAt',
+  'updatedAt',
+];
+
 export class RequestRepository {
   async findAndCountAll({
     status,
@@ -34,14 +48,28 @@ export class RequestRepository {
     }
 
     const { rows, count } = await MaintenanceRequest.findAndCountAll({
+      attributes: REQUEST_ATTRIBUTES,
       where,
       limit,
       offset,
       order: [[sortBy, sortOrder.toUpperCase()]],
       include: [
-        { model: Equipment, as: 'equipment' },
-        { model: RequestStatusHistory, as: 'statusHistory' },
-        { model: Technician, as: 'assignees' },
+        {
+          model: Equipment,
+          as: 'equipment',
+          attributes: ['id', 'name', 'type', 'serialNumber', 'status'],
+        },
+        {
+          model: RequestStatusHistory,
+          as: 'statusHistory',
+          attributes: ['id', 'previousStatus', 'newStatus', 'changedBy', 'comment', 'createdAt'],
+        },
+        {
+          model: Technician,
+          as: 'assignees',
+          attributes: ['id', 'fullName', 'specialization', 'personnelNumber'],
+          through: { attributes: ['id', 'role', 'hours', 'createdAt'] },
+        },
       ],
     });
 
@@ -53,10 +81,24 @@ export class RequestRepository {
 
   async findAll() {
     const items = await MaintenanceRequest.findAll({
+      attributes: REQUEST_ATTRIBUTES,
       include: [
-        { model: Equipment, as: 'equipment' },
-        { model: RequestStatusHistory, as: 'statusHistory' },
-        { model: Technician, as: 'assignees' },
+        {
+          model: Equipment,
+          as: 'equipment',
+          attributes: ['id', 'name', 'type', 'serialNumber', 'status'],
+        },
+        {
+          model: RequestStatusHistory,
+          as: 'statusHistory',
+          attributes: ['id', 'previousStatus', 'newStatus', 'changedBy', 'comment', 'createdAt'],
+        },
+        {
+          model: Technician,
+          as: 'assignees',
+          attributes: ['id', 'fullName', 'specialization'],
+          through: { attributes: ['id', 'role', 'hours', 'createdAt'] },
+        },
       ],
       order: [['createdAt', 'DESC']],
     });
@@ -65,10 +107,24 @@ export class RequestRepository {
 
   async findById(id) {
     const item = await MaintenanceRequest.findByPk(id, {
+      attributes: REQUEST_ATTRIBUTES,
       include: [
-        { model: Equipment, as: 'equipment' },
-        { model: RequestStatusHistory, as: 'statusHistory' },
-        { model: Technician, as: 'assignees' },
+        {
+          model: Equipment,
+          as: 'equipment',
+          attributes: ['id', 'name', 'type', 'serialNumber', 'status'],
+        },
+        {
+          model: RequestStatusHistory,
+          as: 'statusHistory',
+          attributes: ['id', 'previousStatus', 'newStatus', 'changedBy', 'comment', 'createdAt'],
+        },
+        {
+          model: Technician,
+          as: 'assignees',
+          attributes: ['id', 'fullName', 'specialization'],
+          through: { attributes: ['id', 'role', 'hours', 'createdAt'] },
+        },
       ],
     });
     return item ? item.toJSON() : null;
@@ -76,10 +132,20 @@ export class RequestRepository {
 
   async findByEquipmentId(equipmentId) {
     const items = await MaintenanceRequest.findAll({
+      attributes: REQUEST_ATTRIBUTES,
       where: { equipmentId },
       include: [
-        { model: RequestStatusHistory, as: 'statusHistory' },
-        { model: Technician, as: 'assignees' },
+        {
+          model: RequestStatusHistory,
+          as: 'statusHistory',
+          attributes: ['id', 'previousStatus', 'newStatus', 'changedBy', 'comment', 'createdAt'],
+        },
+        {
+          model: Technician,
+          as: 'assignees',
+          attributes: ['id', 'fullName', 'specialization'],
+          through: { attributes: ['id', 'role', 'hours', 'createdAt'] },
+        },
       ],
       order: [['createdAt', 'DESC']],
     });
@@ -88,6 +154,7 @@ export class RequestRepository {
 
   async findActiveByEquipmentId(equipmentId) {
     const items = await MaintenanceRequest.findAll({
+      attributes: ['id', 'equipmentId', 'status', 'title'],
       where: {
         equipmentId,
         status: { [Op.in]: ['new', 'in_progress'] },
@@ -117,7 +184,10 @@ export class RequestRepository {
 
   async update(id, patch, { changedBy = 'system', comment = null } = {}) {
     return await sequelize.transaction(async (t) => {
-      const request = await MaintenanceRequest.findByPk(id, { transaction: t });
+      const request = await MaintenanceRequest.findByPk(id, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
       if (!request) return null;
 
       const previousStatus = request.status;
@@ -154,27 +224,47 @@ export class RequestRepository {
 
   async getStatusHistory(requestId) {
     const history = await RequestStatusHistory.findAll({
+      attributes: ['id', 'requestId', 'previousStatus', 'newStatus', 'changedBy', 'comment', 'createdAt'],
       where: { requestId },
       order: [['createdAt', 'ASC']],
     });
     return history.map((h) => h.toJSON());
   }
-  async addAssignee(requestId, { technicianId, role = 'member', hours = 0.0 }) {
-    const [assignee, created] = await RequestAssignee.findOrCreate({
-      where: { requestId, technicianId },
-      defaults: { role, hours },
+
+  async setAssignees(requestId, assignees) {
+    return await sequelize.transaction(async (t) => {
+      await RequestAssignee.destroy({ where: { requestId }, transaction: t });
+      const records = assignees.map((a) => ({
+        requestId,
+        technicianId: a.technicianId,
+        role: a.role || 'member',
+        hours: a.hours || 0,
+      }));
+      const created = await RequestAssignee.bulkCreate(records, { transaction: t });
+      return created.map((c) => c.toJSON());
     });
-    if (!created) {
-      await assignee.update({
-        role,
-        hours: Number(assignee.hours) + Number(hours),
-      });
-    }
-    return assignee.toJSON();
+  }
+
+  async removeAssignee(requestId, technicianId) {
+    const count = await RequestAssignee.destroy({
+      where: { requestId, technicianId },
+    });
+    return count > 0;
+  }
+
+  async countAssignees(requestId) {
+    return await RequestAssignee.count({ where: { requestId } });
+  }
+
+  async findAssignee(requestId, technicianId) {
+    const item = await RequestAssignee.findOne({ where: { requestId, technicianId } });
+    return item ? item.toJSON() : null;
   }
 
   async findTechnicianById(id) {
-    const tech = await Technician.findByPk(id);
+    const tech = await Technician.findByPk(id, {
+      attributes: ['id', 'fullName', 'specialization', 'personnelNumber'],
+    });
     return tech ? tech.toJSON() : null;
   }
 }
