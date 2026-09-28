@@ -1,30 +1,56 @@
-# Equipment Maintenance REST API
+# Equipment Maintenance REST API (CaseLab Week 3)
 
-REST API на Express 5 для централизованного учёта оборудования производственной площадки и заявок на техническое обслуживание с контролем жизненного цикла и оценкой погодных условий для наружных работ.
+Промышленный REST API на Express 5 и PostgreSQL (Sequelize ORM) для централизованного учёта оборудования производственных площадок возобновляемой энергетики, заявок на техническое обслуживание, назначения ремонтных бригад и аналитической отчётности с контролем погодных условий.
 
 ---
 
 ## 1. Требования к окружению и запуск
 
-- **Node.js**: версии 18.0.0 или выше (требование Express 5).
+- **Node.js**: версии 18.0.0 или выше (ES Modules).
+- **Docker & Docker Compose**: для контейнеризации СУБД PostgreSQL.
 - **Менеджер пакетов**: npm 9+.
 
-### Установка зависимостей
+### 1.1. Запуск инфраструктуры (Docker PostgreSQL)
+Сервис использует контейнеризированную базу данных PostgreSQL:
+```bash
+docker compose up -d
+```
+Для остановки контейнеров:
+```bash
+docker compose down
+```
+
+### 1.2. Установка зависимостей
 ```bash
 npm install
 ```
 
-### Запуск в режиме разработки (nodemon)
+### 1.3. Миграции и заполнение базы данных (Seeds)
+Применение миграций схемы 3NF:
+```bash
+npm run db:migrate
+```
+Заполнение демонстрационными данными (сиды площадок, оборудования, паспортов, техников и заявок):
+```bash
+npm run db:seed
+```
+Полный сброс и повторный накат базы:
+```bash
+npm run db:reset
+```
+
+### 1.4. Запуск приложения
+Режим разработки с автоперезагрузкой:
 ```bash
 npm run dev
 ```
-
-### Запуск в production режиме
+Production-режим:
 ```bash
 npm start
 ```
 
-### Запуск автоматических тестов (Jest + Supertest)
+### 1.5. Автоматические тесты (Jest + Supertest)
+Запуск набора из 32 интеграционных тестов:
 ```bash
 npm test
 ```
@@ -33,87 +59,348 @@ npm test
 
 ## 2. Переменные окружения (.env)
 
-Конфигурация приложения вынесена в переменные окружения. Для локального запуска скопируйте `.env.example` в `.env`:
-
 | Переменная | Значение по умолчанию | Описание |
 |---|---|---|
 | `PORT` | `3000` | Порт HTTP-сервера |
 | `NODE_ENV` | `development` | Режим работы (`development` / `production`) |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Разрешённые веб-источники через запятую |
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/equipment_maintenance` | Строка подключения к PostgreSQL |
+| `DB_POOL_MAX` | `10` | Максимальный размер пула соединений |
+| `DB_POOL_MIN` | `2` | Минимальный размер пула соединений |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Разрешённые веб-источники (не разрешённые отклоняются без 500) |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Окно ограничения частоты запросов (мс) |
 | `RATE_LIMIT_MAX` | `100` | Максимальное количество запросов на `/api` в окно |
 | `WEATHER_API_URL` | `https://api.open-meteo.com/v1/forecast` | Внешний API прогноза погоды Open-Meteo |
-| `REQUEST_TIMEOUT_MS` | `5000` | Таймаут сетевых запросов (мс) |
 | `WEATHER_MAX_WIND_SPEED` | `12.0` | Порог скорости ветра (м/с) для наружных работ |
 | `WEATHER_MAX_PRECIPITATION` | `0.5` | Порог осадков (мм) для наружных работ |
-| `LOG_LEVEL` | `debug` | Уровень логирования pino (`debug`, `info`, `warn`, `error`) |
+| `LOG_LEVEL` | `debug` | Уровень логирования Pino (`debug`, `info`, `warn`, `error`) |
 
 ---
 
-## 3. Таблица эндпоинтов API
+## 3. Схема базы данных (3-я нормальная форма)
+
+Схема нормализована до 3NF и включает 7 сущностей:
+
+```
+[ sites ] (Площадки)
+   │ 1
+   │
+   └──< N [ equipment ] (Оборудование)
+            │ 1          │ 1
+            │            │
+            │ 1          └──< N [ maintenance_requests ] (Заявки)
+    [ equipment_passports ]          │ 1                  │ 1
+     (Технические паспорта)          │                    │
+                                     │ N                  └──< N [ request_status_history ]
+                           [ request_assignees ]                  (Аудит смены статусов)
+                                     │ N
+                                     │ 
+                                     │ 1
+                              [ technicians ] (Техники/бригады)
+```
+
+1. **`sites`**: производственные площадки (ВЭС, СЭС) с географическими координатами и регионами.
+2. **`equipment`**: единицы оборудования с внешним ключом `site_id` и серийным номером.
+3. **`equipment_passports`**: паспорта оборудования (1:1 к `equipment`) с паспортной мощностью (`nominal_power`) и производителем.
+4. **`maintenance_requests`**: заявки на техническое обслуживание с приоритетом, статусом и датами выполнения.
+5. **`technicians`**: персонал инженерно-ремонтных бригад с разрядом квалификации и специализацией.
+6. **`request_assignees`**: таблица-связка M:N между заявками и техниками с фиксацией роли и затраченных часов (`hours`).
+7. **`request_status_history`**: неизменяемый журнал (audit trail) изменения статусов заявок.
+
+---
+
+## 4. Таблица эндпоинтов API
 
 Все маршруты API имеют префикс `/api`.
 
 | Метод | Путь | Назначение | Коды ответов |
 |---|---|---|---|
-| `GET` | `/api/health` | Проверка доступности сервиса (без внешних вызовов) | `200` |
-| `GET` | `/api/equipment` | Список оборудования (фильтры: `status`, `type`, `search`, диапазон `installedFrom`/`installedTo`; сортировка, пагинация) | `200` |
-| `POST` | `/api/equipment` | Создание единицы оборудования | `201` (Location), `400`, `409` |
+| `GET` | `/api/health` | Проверка жизнеспособности сервиса | `200` |
+| `GET` | `/api/equipment` | Список оборудования с фильтрами, сортировкой и пагинацией | `200` |
+| `POST` | `/api/equipment` | Регистрация нового оборудования | `201` (Location), `400`, `409` |
 | `GET` | `/api/equipment/:id` | Карточка оборудования | `200`, `400`, `404` |
-| `PATCH` | `/api/equipment/:id` | Частичное обновление полей оборудования | `200`, `400`, `404`, `409` |
-| `DELETE` | `/api/equipment/:id` | Удаление оборудования (запрещено при активных заявках) | `204`, `400`, `404`, `409` |
-| `GET` | `/api/equipment/:id/requests` | Вложенный ресурс: список заявок по оборудованию | `200`, `400`, `404` |
-| `GET` | `/api/equipment/:id/weather` | Прогноз погоды по координатам и пригодность окна для наружных работ | `200`, `400`, `404`, `502`, `503`, `504` |
-| `GET` | `/api/requests` | Список заявок (фильтры: `status`, `priority`, `equipmentId`, диапазоны дат `createdFrom`/`createdTo`, `plannedFrom`/`plannedTo`; сортировка, пагинация) | `200` |
-| `POST` | `/api/requests` | Создание заявки на обслуживание | `201` (Location), `400`, `404` |
+| `PATCH` | `/api/equipment/:id` | Редактирование оборудования | `200`, `400`, `404`, `409` |
+| `DELETE` | `/api/equipment/:id` | Удаление оборудования (блокируется при открытых заявках) | `204`, `400`, `404`, `409` |
+| `GET` | `/api/equipment/:id/requests` | Список заявок по конкретному оборудованию | `200`, `400`, `404` |
+| `GET` | `/api/equipment/:id/weather` | Прогноз погоды и допуск к наружным работам | `200`, `400`, `404`, `502-504` |
+| `GET` | `/api/requests` | Реестр заявок с фильтрами по статусу, приоритету и диапазону дат | `200` |
+| `POST` | `/api/requests` | Создание новой заявки (всегда в статусе `new`) | `201` (Location), `400`, `404` |
 | `GET` | `/api/requests/:id` | Карточка заявки | `200`, `400`, `404` |
-| `PATCH` | `/api/requests/:id` | Редактирование полей заявки (кроме статуса) | `200`, `400`, `404` |
-| `PATCH` | `/api/requests/:id/status` | Изменение статуса заявки с проверкой допустимости | `200`, `400`, `404`, `409` |
+| `PATCH` | `/api/requests/:id` | Редактирование полей заявки | `200`, `400`, `404` |
+| `PATCH` | `/api/requests/:id/status` | Смена статуса заявки с проверкой допустимости переходов | `200`, `400`, `404`, `409` |
+| `POST` | `/api/requests/:id/assignees` | Назначение техника на заявку с учётом трудозатрат | `201`, `400`, `404`, `409` |
+| `GET` | `/api/requests/:id/history` | Аудиторский след смены статусов заявки | `200`, `400`, `404` |
 | `DELETE` | `/api/requests/:id` | Удаление заявки | `204`, `400`, `404` |
-
-### Оценка пригодности погодного окна для наружных работ (`GET /api/equipment/:id/weather`)
-Сервис извлекает координаты оборудования и запрашивает суточный метеопрогноз в Open-Meteo API. Погодное окно считается **пригодным для наружных монтажных и ремонтных работ** (`isSuitableForOutdoorWork: true`), если одновременно выполняются два правила безопасности:
-1. **Скорость ветра**: максимальная скорость порывов ветра не превышает допустимый предел: `wind_speed_10m_max <= WEATHER_MAX_WIND_SPEED` (по умолчанию `12.0 м/с`).
-2. **Осадки**: суточное количество осадков не превышает порог: `precipitation_sum <= WEATHER_MAX_PRECIPITATION` (по умолчанию `0.5 мм`).
-
-В ответе возвращаются флаги безопасности `safetyFactors: { windSafe, precipitationSafe }` и установленные пороговые значения `safetyThresholds`. В случае сбоя или недоступности внешнего сервиса API возвращает корректный статус `502/503/504` с понятным сообщением без аварийного падения сервера.
+| `GET` | `/api/sites` | Список всех производственных площадок | `200` |
+| `GET` | `/api/sites/:id/summary` | Сводка по площадке: суммарная мощность, разбивка по статусам и активным заявкам | `200`, `400`, `404` |
+| `GET` | `/api/reports/maintenance` | **Аналитический Raw SQL отчёт** по трудозатратам бригад и MTTR | `200`, `400` |
 
 ---
 
-## 4. Модель данных и правила переходов
+## 5. Примеры запросов и ответов
 
-### Оборудование (`equipment`)
-- `id`: UUID (генерируется сервером)
-- `name`: строка, 3–100 символов, обязательное
-- `type`: `turbine` \| `inverter` \| `sensor` \| `substation`
-- `serialNumber`: строка, уникальная в пределах системы
-- `location`: `{ lat: number (-90..90), lon: number (-180..180) }`
-- `status`: `operational` \| `maintenance` \| `fault` \| `decommissioned` (default: `operational`)
-- `installedAt`: ISO-дата, **не в будущем**
-- `createdAt`, `updatedAt`: проставляются сервером
+### 5.1. Регистрация оборудования (`POST /api/equipment`)
 
-### Заявка на обслуживание (`maintenance request`)
-- `id`: UUID (генерируется сервером)
-- `equipmentId`: UUID, ссылка на существующее оборудование (иначе 404)
-- `title`: строка, 5–120 символов, обязательное
-- `description`: строка, до 2000 символов
-- `priority`: `low` \| `medium` \| `high` \| `critical`
-- `status`: `new` \| `in_progress` \| `done` \| `rejected` (default: `new`)
-- `plannedAt`: ISO-дата-время, необязательное
-- `createdAt`, `updatedAt`: проставляются сервером
+**Запрос:**
+```http
+POST /api/equipment HTTP/1.1
+Host: localhost:3000
+Content-Type: application/json
 
-- **Служебные поля и неизвестные параметры**: Поля `id`, `createdAt`, `updatedAt` генерируются сервером и защищены от ручного изменения через API. Неизвестные поля тела запроса игнорируются (отбрасываются валидатором).
-- **Правила жизненного цикла заявок**:
-  - Допустимо: `new` ➔ `in_progress` ➔ `done`; `new` ➔ `rejected`; `in_progress` ➔ `rejected`.
-  - **Из статусов `done` и `rejected` любые переходы запрещены (409 Conflict)**.
-  - **Удаление оборудования при наличии незакрытых заявок (`new`, `in_progress`) запрещено (409 Conflict)**.
+{
+  "name": "Ветрогенератор ВЭУ-05",
+  "type": "wind_turbine",
+  "serialNumber": "WT-2024-005",
+  "location": {
+    "lat": 68.9712,
+    "lon": 33.0845
+  },
+  "status": "operational",
+  "installedAt": "2024-03-01T00:00:00.000Z"
+}
+```
+
+**Ответ:** `201 Created`
+```http
+Location: /api/equipment/7a8f3b21-4f12-4c8d-9b10-6e4a2c1f90a1
+Content-Type: application/json; charset=utf-8
+
+{
+  "data": {
+    "id": "7a8f3b21-4f12-4c8d-9b10-6e4a2c1f90a1",
+    "name": "Ветрогенератор ВЭУ-05",
+    "type": "wind_turbine",
+    "serialNumber": "WT-2024-005",
+    "location": {
+      "lat": 68.9712,
+      "lon": 33.0845
+    },
+    "status": "operational",
+    "installedAt": "2024-03-01T00:00:00.000Z",
+    "createdAt": "2026-09-28T12:00:00.000Z",
+    "updatedAt": "2026-09-28T12:00:00.000Z"
+  }
+}
+```
 
 ---
 
-## 5. Формат ответа об ошибке
+### 5.2. Создание заявки на обслуживание (`POST /api/requests`)
 
-Все ошибки API имеют единый стандартизированный формат:
+> **Правило бизнес-логики**: Любая создаваемая заявка принудительно переводится в статус `new`. Создание заявки сразу в статусе `done` запрещено.
 
+**Запрос:**
+```http
+POST /api/requests HTTP/1.1
+Host: localhost:3000
+Content-Type: application/json
+
+{
+  "equipmentId": "22222222-2222-4222-8222-222222222001",
+  "title": "Плановое ТО редуктора и замена масла",
+  "description": "Провести диагностику уровня вибраций и замену смазки",
+  "priority": "high",
+  "plannedAt": "2026-10-15T09:00:00.000Z"
+}
+```
+
+**Ответ:** `201 Created`
+```http
+Location: /api/requests/a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d
+Content-Type: application/json; charset=utf-8
+
+{
+  "data": {
+    "id": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+    "equipmentId": "22222222-2222-4222-8222-222222222001",
+    "title": "Плановое ТО редуктора и замена масла",
+    "description": "Провести диагностику уровня вибраций и замену смазки",
+    "priority": "high",
+    "status": "new",
+    "author": "Dispatcher",
+    "plannedAt": "2026-10-15T09:00:00.000Z",
+    "createdAt": "2026-09-28T12:05:00.000Z",
+    "updatedAt": "2026-09-28T12:05:00.000Z"
+  }
+}
+```
+
+---
+
+### 5.3. Назначение техника на заявку (`POST /api/requests/:id/assignees`)
+
+**Запрос:**
+```http
+POST /api/requests/a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d/assignees HTTP/1.1
+Host: localhost:3000
+Content-Type: application/json
+
+{
+  "technicianId": "33333333-3333-4333-8333-333333333001",
+  "role": "lead",
+  "hours": 4.5
+}
+```
+
+**Ответ:** `201 Created`
+```json
+{
+  "data": {
+    "id": "f9a8b7c6-d5e4-4f3a-8b2c-1d0e9f8a7b6c",
+    "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+    "technicianId": "33333333-3333-4333-8333-333333333001",
+    "role": "lead",
+    "hours": 4.5,
+    "assignedAt": "2026-09-28T12:10:00.000Z"
+  }
+}
+```
+
+---
+
+### 5.4. История статусов заявки (Audit Trail) (`GET /api/requests/:id/history`)
+
+**Запрос:**
+```http
+GET /api/requests/a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d/history HTTP/1.1
+Host: localhost:3000
+```
+
+**Ответ:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": "11111111-aaaa-4111-8111-000000000001",
+      "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+      "previousStatus": null,
+      "newStatus": "new",
+      "changedBy": "Dispatcher",
+      "comment": "Заявка создана",
+      "createdAt": "2026-09-28T12:05:00.000Z"
+    },
+    {
+      "id": "22222222-bbbb-4222-8222-000000000002",
+      "requestId": "a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d",
+      "previousStatus": "new",
+      "newStatus": "in_progress",
+      "changedBy": "System",
+      "comment": null,
+      "createdAt": "2026-09-28T12:15:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 5.5. Сводка по площадке (`GET /api/sites/:id/summary`)
+
+**Запрос:**
+```http
+GET /api/sites/11111111-1111-4111-8111-111111111001/summary HTTP/1.1
+Host: localhost:3000
+```
+
+**Ответ:** `200 OK`
+```json
+{
+  "data": {
+    "site": {
+      "id": "11111111-1111-4111-8111-111111111001",
+      "name": "Ветропарк Северный",
+      "code": "SITE-WIND-01",
+      "region": "Мурманская область",
+      "coordinates": {
+        "lat": 68.97,
+        "lng": 33.08
+      },
+      "createdAt": "2026-05-31T10:00:00.000Z",
+      "updatedAt": "2026-05-31T10:00:00.000Z"
+    },
+    "metrics": {
+      "totalEquipment": 3,
+      "totalNominalPower": 22900,
+      "equipmentByStatus": {
+        "operational": 2,
+        "under_maintenance": 1,
+        "decommissioned": 0
+      },
+      "equipmentByType": {
+        "wind_turbine": 2,
+        "substation": 1
+      },
+      "activeRequestsCount": 6
+    }
+  }
+}
+```
+
+---
+
+### 5.6. Аналитический Raw SQL отчёт по ТО и MTTR (`GET /api/reports/maintenance`)
+
+**Запрос:**
+```http
+GET /api/reports/maintenance?siteId=11111111-1111-4111-8111-111111111001 HTTP/1.1
+Host: localhost:3000
+```
+
+**Ответ:** `200 OK`
+```json
+{
+  "data": {
+    "period": {
+      "startDate": null,
+      "endDate": null
+    },
+    "filters": {
+      "siteId": "11111111-1111-4111-8111-111111111001"
+    },
+    "overall": {
+      "totalEquipment": 3,
+      "totalRequests": 10,
+      "completedRequests": 4,
+      "activeRequests": 6,
+      "rejectedRequests": 0,
+      "totalTechnicianHours": 24.5
+    },
+    "breakdown": [
+      {
+        "siteId": "11111111-1111-4111-8111-111111111001",
+        "siteName": "Ветропарк Северный",
+        "siteCode": "SITE-WIND-01",
+        "equipmentType": "substation",
+        "equipmentCount": 1,
+        "totalRequests": 2,
+        "completedRequests": 1,
+        "activeRequests": 1,
+        "rejectedRequests": 0,
+        "totalTechnicianHours": 5.0,
+        "avgResolutionTimeHours": 3.8
+      },
+      {
+        "siteId": "11111111-1111-4111-8111-111111111001",
+        "siteName": "Ветропарк Северный",
+        "siteCode": "SITE-WIND-01",
+        "equipmentType": "wind_turbine",
+        "equipmentCount": 2,
+        "totalRequests": 8,
+        "completedRequests": 3,
+        "activeRequests": 5,
+        "rejectedRequests": 0,
+        "totalTechnicianHours": 19.5,
+        "avgResolutionTimeHours": 5.2
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 5.7. Примеры ошибок
+
+#### 400 Validation Error (Отрицательные часы или невалидная схема)
 ```json
 {
   "error": {
@@ -121,73 +408,50 @@ npm test
     "message": "Некорректные данные запроса",
     "details": [
       {
-        "field": "title",
-        "message": "Заголовок должен быть от 5 до 120 символов"
+        "field": "hours",
+        "message": "Количество часов не может быть отрицательным"
       }
     ],
-    "requestId": "b1f2c3d4-5678-90ab-cdef-1234567890ab"
+    "requestId": "9a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d"
   }
 }
 ```
 
-### Коды ошибок:
-- `400 BAD_REQUEST / VALIDATION_ERROR`: синтаксические ошибки JSON или валидация схемы Zod (включая невалидный UUID в path-параметрах).
-- `404 NOT_FOUND`: ресурс, маршрут или связанное оборудование не найдены.
-- `409 CONFLICT`: дубликат `serialNumber`, недопустимый переход статуса заявки или удаление оборудования с активными заявками.
-- `429 TOO_MANY_REQUESTS`: превышение лимита частоты запросов.
-- `500 INTERNAL_ERROR`: непредвиденная ошибка (в production стек-трейсы скрыты).
-- `502 / 503 / 504`: ошибки или таймаут внешнего погодного сервиса (с понятным описанием).
-
----
-
-## 6. Безопасность и логирование
-
-- **CORS**: Список разрешённых веб-источников настраивается через переменную окружения `CORS_ORIGINS` (по умолчанию `http://localhost:3000,http://localhost:5173`). Эти адреса выделены под клиентские SPA-приложения производственной площадки (React/Next.js на порту 3000 и Vite-дэшборд на порту 5173). Использование небезопасной маски `*` исключено.
-- **Helmet**: Автоматическая установка защитных HTTP-заголовков (`Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `HSTS`, `Referrer-Policy`).
-- **Rate Limiting**: `express-rate-limit` защищает все маршруты `/api` (по умолчанию 100 запросов в минуту с одного IP) с возвратом кода `429` и стандартных заголовков `RateLimit-*`.
-- **Ограничение тела запроса**: Ограничение размера payload до `100kb` защищает сервер от DoS-атак переполнения памяти.
-- **Политика Cookie**: Данный REST API является stateless и не использует сессионные cookies. В случае добавления cookie-аутентификации в решении обязательно применяются флаги `HttpOnly` (недоступность для XSS), `Secure` (передача исключительно по HTTPS) и `SameSite=Strict` (или `Lax`) для гарантированного предотвращения CSRF-атак.
-- **Логирование**: Высокопроизводительный логгер `pino` + `pino-http`. Отладочные вызовы `console.log` исключены. Каждый входящий запрос получает `X-Request-Id` (из входящего заголовка или через `crypto.randomUUID()`), который пробрасывается через `AsyncLocalStorage` во все слои. Логируются метод, путь, статус ответа, длительность выполнения и ID запроса. Секретные данные, токены и cookies автоматически маскируются (`redact`).
-
----
-
-## 7. Архитектура проекта
-
-Применена классическая слоистая архитектура:
-```
-src/
-├── app.js               # Сборка Express-приложения и конвейера middleware
-├── server.js            # Запуск HTTP сервера и graceful shutdown
-├── config/              # Конфигурация и валидация переменных окружения
-├── lib/
-│   ├── logger.js        # Структурный логгер Pino
-│   └── context.js       # Контекст запроса на базе AsyncLocalStorage
-├── errors/              # Иерархия ошибок (AppError, NotFoundError, ConflictError, ValidationError)
-├── middlewares/
-│   ├── http-logger.middleware.js   # Логирование запросов и генерация requestId
-│   ├── validate.middleware.js      # Переиспользуемая валидация Zod (body, query, params)
-│   └── error-handler.middleware.js # Централизованный обработчик ошибок
-├── validators/          # Zod-схемы для equipment и request (с фильтрацией дат и отбрасыванием лишних полей)
-├── controllers/         # Контроллеры HTTP-уровня (req, res)
-├── services/            # Бизнес-логика, контроль статусов и интеграция с погодой
-├── repositories/        # Слой доступа к данным (JSON-хранилище в папке data/)
-└── routes/              # Маршрутизация REST API
-docs/
-└── postman/             # Экспортированная коллекция Postman и файл окружения
-tests/                   # Интеграционные автотесты на Jest + Supertest
+#### 409 Conflict (Недопустимый переход статуса)
+```json
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Недопустимый переход статуса из 'done' в 'in_progress'",
+    "requestId": "8f7e6d5c-4b3a-2109-8765-43210fedcba9"
+  }
+}
 ```
 
 ---
 
-## 8. Тестирование в Postman
+## 6. Безопасность и архитектурные решения
 
-Коллекция и окружение экспортированы в папку `docs/postman/`:
+1. **CORS без аварийных сбоев**:
+   - При запросе с неразрешённого веб-источника CORS-middleware вызывает `callback(null, false)`. Заголовки CORS опускаются, браузер блокирует ответ, а Express не падает с ошибкой 500.
+2. **Безопасность Raw SQL отчётов**:
+   - Аналитический SQL-запрос использует параметризованные bind-переменные (`:startDate`, `:endDate`, `:siteId`), исключая риск SQL-инъекций.
+3. **Целостность транзакций**:
+   - Смена статусов и аудит-трейлы выполняются в атомарных ACID-транзакциях PostgreSQL (`sequelize.transaction`).
+4. **Rate Limiting**:
+   - Защита эндпоинтов `/api` с лимитом 100 запросов/минуту и передачей заголовков `RateLimit-*`.
+5. **Логирование Pino**:
+   - Корреляция логов через `X-Request-Id` и `AsyncLocalStorage`.
+
+---
+
+## 7. Коллекция Postman
+
+Файлы для тестирования находятся в директории `docs/postman/`:
 1. `docs/postman/Equipment-Maintenance-API.postman_collection.json`
 2. `docs/postman/Equipment-Maintenance-API.postman_environment.json`
 
-### Как запустить тесты в Postman:
-1. Откройте Postman и импортируйте оба файла.
-2. Выберите окружение **Equipment Maintenance API - Local**.
-3. Коллекция покрывает **100% эндпоинтов** сервиса, сгруппирована по ресурсам (`Health`, `Equipment`, `Requests`, `Negative Scenarios`) и содержит автотесты `pm.test` на статус-коды и структуру тела ответов.
-4. Идентификаторы созданных сущностей автоматически сохраняются в переменные `{{equipmentId}}` и `{{requestId}}` и передаются между запросами цепочки.
-5. Раздел негативных сценариев проверяет: ошибки схем `400`, невалидный UUID `400`, отсутствие ресурса `404`, дубликат серийного номера `409`, недопустимый переход статуса `409`, удаление оборудования с незакрытыми заявками `409` и лимит частоты `429`.
+### Особенности запуска:
+- **Порядок выполнения**: Запрос `DELETE /api/equipment/{{equipmentId}}` вынесен в отдельную завершающую папку **Cleanup**, поэтому создание и прогон заявок происходят гарантированно до удаления родительского оборудования.
+- **Изоляция переменных**: Переменные окружения не затирают динамические переменные коллекции.
+- **Проверка Rate Limiting**: В тесте на заголовки лимитирования проверяются как нормальный ответ 200, так и код 429 при исчерпании квоты.
