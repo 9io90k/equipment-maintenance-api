@@ -7,6 +7,7 @@ import {
   updateRequestStatusSchema,
   requestIdParamSchema,
   queryRequestSchema,
+  addAssigneeSchema,
 } from '../validators/request.validator.js';
 
 const router = Router();
@@ -27,6 +28,17 @@ router.patch(
   '/:id/status',
   validate({ params: requestIdParamSchema, body: updateRequestStatusSchema }),
   requestController.updateStatus
+);
+
+router.get(
+  '/:id/history',
+  validate({ params: requestIdParamSchema }),
+  requestController.getStatusHistory
+);
+router.post(
+  '/:id/assignees',
+  validate({ params: requestIdParamSchema, body: addAssigneeSchema }),
+  requestController.addAssignee
 );
 
 export default router;
