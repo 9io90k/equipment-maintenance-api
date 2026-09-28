@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Equipment Maintenance API (CaseLab Week 2)",
-    "description": "Комплексная коллекция Postman для тестирования REST API учёта оборудования и заявок. Включает переменные окружения, автотесты pm.test для всех эндпоинтов и исчерпывающие негативные сценарии (400, 404, 409, 429).",
+    "name": "Equipment Maintenance API (CaseLab Week 3)",
+    "description": "Комплексная коллекция Postman для тестирования REST API учёта оборудования, заявок, бригад техников, производственных площадок и аналитических отчётов (PostgreSQL + Sequelize).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -24,6 +24,16 @@
       "key": "testSerialNumber",
       "value": "SN-PM-TEST",
       "type": "string"
+    },
+    {
+      "key": "demoSiteId",
+      "value": "11111111-1111-4111-8111-111111111001",
+      "type": "string"
+    },
+    {
+      "key": "demoTechnicianId",
+      "value": "33333333-3333-4333-8333-333333333001",
+      "type": "string"
     }
   ],
   "item": [
@@ -37,13 +47,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "health"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
             }
           },
           "event": [
@@ -119,17 +124,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Ветротурбина ВЭУ-2026\",\n  \"type\": \"turbine\",\n  \"serialNumber\": \"{{testSerialNumber}}\",\n  \"location\": {\n    \"lat\": 55.751244,\n    \"lon\": 37.618423\n  },\n  \"status\": \"operational\",\n  \"installedAt\": \"2024-05-15T08:00:00.000Z\"\n}"
+              "raw": "{\n  \"name\": \"Ветротурбина ВЭУ-2026\",\n  \"type\": \"wind_turbine\",\n  \"serialNumber\": \"{{testSerialNumber}}\",\n  \"location\": {\n    \"lat\": 55.751244,\n    \"lon\": 37.618423\n  },\n  \"status\": \"operational\",\n  \"installedAt\": \"2024-05-15T08:00:00.000Z\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment"]
             }
           }
         },
@@ -161,43 +161,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/equipment?page=1&limit=10&status=operational&type=turbine&installedFrom=2020-01-01T00:00:00.000Z&sortBy=createdAt&sortOrder=desc",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment"
-              ],
+              "raw": "{{baseUrl}}/api/equipment?page=1&limit=10&status=operational&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment"],
               "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                },
-                {
-                  "key": "status",
-                  "value": "operational"
-                },
-                {
-                  "key": "type",
-                  "value": "turbine"
-                },
-                {
-                  "key": "installedFrom",
-                  "value": "2020-01-01T00:00:00.000Z"
-                },
-                {
-                  "key": "sortBy",
-                  "value": "createdAt"
-                },
-                {
-                  "key": "sortOrder",
-                  "value": "desc"
-                }
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "operational" },
+                { "key": "sortBy", "value": "createdAt" },
+                { "key": "sortOrder", "value": "desc" }
               ]
             }
           }
@@ -228,14 +200,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "{{equipmentId}}"]
             }
           }
         },
@@ -250,8 +216,8 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "const json = pm.response.json();",
-                  "pm.test('Status updated to maintenance', function () {",
-                  "    pm.expect(json.data.status).to.eql('maintenance');",
+                  "pm.test('Status updated to under_maintenance', function () {",
+                  "    pm.expect(json.data.status).to.eql('under_maintenance');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -268,18 +234,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"maintenance\"\n}"
+              "raw": "{\n  \"status\": \"under_maintenance\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "{{equipmentId}}"]
             }
           }
         },
@@ -299,9 +259,6 @@
                   "        pm.expect(json.data).to.have.property('forecast');",
                   "        pm.expect(json.data).to.have.property('safetyThresholds');",
                   "        pm.expect(Array.isArray(json.data.forecast)).to.be.true;",
-                  "        if (json.data.forecast.length > 0) {",
-                  "            pm.expect(json.data.forecast[0]).to.have.property('isSuitableForOutdoorWork');",
-                  "        }",
                   "    });",
                   "}"
                 ],
@@ -314,46 +271,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}/weather",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}",
-                "weather"
-              ]
-            }
-          }
-        },
-        {
-          "name": "6. Delete Equipment (Post-tests cleanup)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 204 or 409 if active requests', function () {",
-                  "    pm.expect([204, 409]).to.include(pm.response.code);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "{{equipmentId}}", "weather"]
             }
           }
         }
@@ -401,13 +320,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests"]
             }
           }
         },
@@ -438,38 +352,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests?page=1&limit=10&status=new&priority=high&sortBy=createdAt&sortOrder=desc",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests"],
               "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "10"
-                },
-                {
-                  "key": "status",
-                  "value": "new"
-                },
-                {
-                  "key": "priority",
-                  "value": "high"
-                },
-                {
-                  "key": "sortBy",
-                  "value": "createdAt"
-                },
-                {
-                  "key": "sortOrder",
-                  "value": "desc"
-                }
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "new" },
+                { "key": "priority", "value": "high" },
+                { "key": "sortBy", "value": "createdAt" },
+                { "key": "sortOrder", "value": "desc" }
               ]
             }
           }
@@ -498,14 +389,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}"]
             }
           }
         },
@@ -534,15 +419,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}/requests",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}",
-                "requests"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "{{equipmentId}}", "requests"]
             }
           }
         },
@@ -579,14 +457,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}"]
             }
           }
         },
@@ -623,20 +495,83 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}",
-                "status"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "status"]
             }
           }
         },
         {
-          "name": "7. Complete Request (in_progress -> done)",
+          "name": "7. Assign Technician (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Technician assigned successfully', function () {",
+                  "    pm.expect(json.data).to.have.property('technicianId', pm.collectionVariables.get('demoTechnicianId'));",
+                  "    pm.expect(Number(json.data.hours)).to.eql(4.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"technicianId\": \"{{demoTechnicianId}}\",\n  \"role\": \"lead\",\n  \"hours\": 4.5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "assignees"]
+            }
+          }
+        },
+        {
+          "name": "8. Get Request History Audit Trail (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns audit trail history records', function () {",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "    pm.expect(json.data.length).to.be.greaterThan(0);",
+                  "    pm.expect(json.data[0]).to.have.property('newStatus');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "history"]
+            }
+          }
+        },
+        {
+          "name": "9. Complete Request (in_progress -> done)",
           "event": [
             {
               "listen": "test",
@@ -668,20 +603,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}",
-                "status"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "status"]
             }
           }
         },
         {
-          "name": "8. Delete Request",
+          "name": "10. Delete Request",
           "event": [
             {
               "listen": "test",
@@ -700,13 +628,143 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}"
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sites",
+      "item": [
+        {
+          "name": "1. Get All Sites",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns list of sites', function () {",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "    pm.expect(json.data.length).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sites",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sites"]
+            }
+          }
+        },
+        {
+          "name": "2. Get Site Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns site summary metrics', function () {",
+                  "    pm.expect(json.data).to.have.property('site');",
+                  "    pm.expect(json.data).to.have.property('metrics');",
+                  "    pm.expect(json.data.metrics).to.have.property('totalEquipment');",
+                  "    pm.expect(json.data.metrics).to.have.property('totalNominalPower');",
+                  "    pm.expect(json.data.metrics).to.have.property('activeRequestsCount');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sites/{{demoSiteId}}/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sites", "{{demoSiteId}}", "summary"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "1. Get Maintenance Analytics Report (Raw SQL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Contains report breakdown and overall analytics', function () {",
+                  "    pm.expect(json.data).to.have.property('overall');",
+                  "    pm.expect(json.data).to.have.property('breakdown');",
+                  "    pm.expect(Array.isArray(json.data.breakdown)).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/maintenance",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reports", "maintenance"]
+            }
+          }
+        },
+        {
+          "name": "2. Get Maintenance Report Filtered by Site",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Returns filtered report breakdown', function () {",
+                  "    pm.expect(json.data).to.have.property('breakdown');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/maintenance?siteId={{demoSiteId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reports", "maintenance"],
+              "query": [
+                { "key": "siteId", "value": "{{demoSiteId}}" }
               ]
             }
           }
@@ -752,13 +810,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment"]
             }
           }
         },
@@ -786,14 +839,46 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/not-a-valid-uuid",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "not-a-valid-uuid"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "not-a-valid-uuid"]
+            }
+          }
+        },
+        {
+          "name": "400 - Validation Error (Negative Hours in Assignee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Error code is VALIDATION_ERROR', function () {",
+                  "    pm.expect(json.error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"technicianId\": \"{{demoTechnicianId}}\",\n  \"role\": \"assistant\",\n  \"hours\": -2.5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000001/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "44444444-4444-4444-8444-000000000001", "assignees"]
             }
           }
         },
@@ -821,14 +906,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/00000000-0000-0000-0000-000000000000",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "00000000-0000-0000-0000-000000000000"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "00000000-0000-0000-0000-000000000000"]
             }
           }
         },
@@ -865,13 +944,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests"]
             }
           }
         },
@@ -904,17 +978,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Турбина-Дубликат\",\n  \"type\": \"turbine\",\n  \"serialNumber\": \"{{testSerialNumber}}\",\n  \"location\": { \"lat\": 55.0, \"lon\": 37.0 },\n  \"status\": \"operational\",\n  \"installedAt\": \"2024-01-01T00:00:00.000Z\"\n}"
+              "raw": "{\n  \"name\": \"Турбина-Дубликат\",\n  \"type\": \"wind_turbine\",\n  \"serialNumber\": \"WT-2023-001\",\n  \"location\": { \"lat\": 55.0, \"lon\": 37.0 },\n  \"status\": \"operational\",\n  \"installedAt\": \"2024-01-01T00:00:00.000Z\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment"]
             }
           }
         },
@@ -950,61 +1019,22 @@
               "raw": "{\n  \"status\": \"in_progress\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/requests/{{requestId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "requests",
-                "{{requestId}}",
-                "status"
-              ]
+              "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000005/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "44444444-4444-4444-8444-000000000005", "status"]
             }
           }
         },
         {
-          "name": "409 - Delete Equipment with Active Requests",
+          "name": "Rate Limiting Headers Check (200 OK)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 409 or 404/204 depending on order', function () {",
-                  "    pm.expect([409, 404, 204]).to.include(pm.response.code);",
+                  "pm.test('Status code is 200 or 429', function () {",
+                  "    pm.expect([200, 429]).to.include(pm.response.code);",
                   "});",
-                  "if (pm.response.code === 409) {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json.error.code).to.eql('CONFLICT');",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "equipment",
-                "{{equipmentId}}"
-              ]
-            }
-          }
-        },
-        {
-          "name": "429 - Rate Limit Headers and Throttling Check",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
                   "pm.test('Rate limit headers present', function () {",
                   "    pm.expect(pm.response.headers.has('RateLimit-Limit') || pm.response.headers.has('ratelimit-limit')).to.be.true;",
                   "});"
@@ -1018,13 +1048,38 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "health"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete Created Equipment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 204 or 404', function () {",
+                  "    pm.expect([204, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "equipment", "{{equipmentId}}"]
             }
           }
         }

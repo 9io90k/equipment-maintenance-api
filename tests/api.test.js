@@ -1,26 +1,16 @@
 import request from 'supertest';
 import app from '../src/app.js';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
-const DATA_DIR = path.resolve('data');
+import { sequelize } from '../src/models/index.js';
 
 describe('Equipment Maintenance REST API Tests', () => {
   let createdEquipmentId;
   let createdRequestId;
-
-  beforeAll(async () => {
-    try {
-      await fs.rm(DATA_DIR, { recursive: true, force: true });
-    } catch {}
-  });
+  const demoTechnicianId = '33333333-3333-4333-8333-333333333001';
+  const demoSiteId = '11111111-1111-4111-8111-111111111001';
 
   afterAll(async () => {
-    try {
-      await fs.rm(DATA_DIR, { recursive: true, force: true });
-    } catch {}
+    await sequelize.close();
   });
-
 
   describe('1. Health Check & Error Handling', () => {
     it('GET /api/health - должен возвращать 200 OK и статус ok', async () => {
@@ -78,7 +68,7 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.code).toBe('CONFLICT');
     });
 
-    it('POST /api/equipment - 400 Validation Error при некорректных данных (дата в будущем, некорректный тип)', async () => {
+    it('POST /api/equipment - 400 Validation Error при некорректных данных', async () => {
       const invalidData = {
         name: 'AB',
         type: 'unknown_type',
@@ -94,7 +84,7 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.details.length).toBeGreaterThan(0);
     });
 
-    it('POST /api/equipment - неизвестные поля тела запроса игнорируются (strip) согласно ТЗ', async () => {
+    it('POST /api/equipment - неизвестные поля тела запроса игнорируются (strip)', async () => {
       const dataWithUnknownField = {
         name: 'Турбина с лишними полями',
         type: 'turbine',
@@ -112,7 +102,6 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.data.createdAt).not.toBe('1999-01-01T00:00:00.000Z');
       expect(res.body.data.unexpectedCustomProperty).toBeUndefined();
 
-      // Очищаем созданную единицу
       await request(app).delete(`/api/equipment/${res.body.data.id}`);
     });
 
@@ -120,13 +109,9 @@ describe('Equipment Maintenance REST API Tests', () => {
       const res = await request(app).get('/api/equipment?page=1&limit=10');
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.meta).toEqual(
-        expect.objectContaining({
-          total: 1,
-          page: 1,
-          limit: 10,
-        })
-      );
+      expect(res.body.meta.page).toBe(1);
+      expect(res.body.meta.limit).toBe(10);
+      expect(res.body.meta.total).toBeGreaterThanOrEqual(1);
     });
 
     it('GET /api/equipment - фильтрация по диапазону дат (installedFrom, installedTo)', async () => {
@@ -134,10 +119,10 @@ describe('Equipment Maintenance REST API Tests', () => {
         '/api/equipment?installedFrom=2024-01-01T00:00:00.000Z&installedTo=2024-12-31T23:59:59.999Z'
       );
       expect(matchRes.status).toBe(200);
-      expect(matchRes.body.data.length).toBe(1);
+      expect(matchRes.body.data.length).toBeGreaterThanOrEqual(1);
 
       const noMatchRes = await request(app).get(
-        '/api/equipment?installedFrom=2025-01-01T00:00:00.000Z'
+        '/api/equipment?installedFrom=2090-01-01T00:00:00.000Z'
       );
       expect(noMatchRes.status).toBe(200);
       expect(noMatchRes.body.data.length).toBe(0);
@@ -194,7 +179,7 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
       expect(res.body.data.length).toBe(1);
-      expect(res.body.meta).toHaveProperty('total', 1);
+      expect(res.body.meta.total).toBe(1);
     });
 
     it('GET /api/requests/:id - получение карточки заявки по ID', async () => {
@@ -245,6 +230,33 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.code).toBe('CONFLICT');
     });
 
+    it('POST /api/requests/:id/assignees - назначение техника и часов (201 Created)', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          technicianId: demoTechnicianId,
+          role: 'lead',
+          hours: 4.5,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data).toHaveProperty('technicianId', demoTechnicianId);
+      expect(Number(res.body.data.hours)).toBe(4.5);
+    });
+
+    it('POST /api/requests/:id/assignees - 400 Validation Error при отрицательных часах', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          technicianId: demoTechnicianId,
+          role: 'assistant',
+          hours: -2,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('PATCH /api/requests/:id/status - перевод in_progress -> done (200 OK)', async () => {
       const res = await request(app)
         .patch(`/api/requests/${createdRequestId}/status`)
@@ -261,6 +273,17 @@ describe('Equipment Maintenance REST API Tests', () => {
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('CONFLICT');
+    });
+
+    it('GET /api/requests/:id/history - получение аудиторского следа смены статусов', async () => {
+      const res = await request(app).get(`/api/requests/${createdRequestId}/history`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(3); // new -> in_progress -> done
+      const statuses = res.body.data.map(h => h.newStatus);
+      expect(statuses).toContain('new');
+      expect(statuses).toContain('in_progress');
+      expect(statuses).toContain('done');
     });
 
     it('DELETE /api/requests/:id - удаление заявки (204 No Content)', async () => {
@@ -285,7 +308,6 @@ describe('Equipment Maintenance REST API Tests', () => {
     });
 
     it('GET /api/equipment/:id/weather - возвращает прогноз и оценку пригодности для наружных работ', async () => {
-      // Создаем оборудование
       const equipRes = await request(app).post('/api/equipment').send({
         name: 'Ветропарк Тестовый Юг',
         type: 'turbine',
@@ -297,7 +319,6 @@ describe('Equipment Maintenance REST API Tests', () => {
 
       try {
         const weatherRes = await request(app).get(`/api/equipment/${equipId}/weather`);
-        // При доступности сети возвращается 200 с прогнозом, при недоступности сети возвращается 502/503/504 без краша сервиса
         if (weatherRes.status === 200) {
           expect(weatherRes.body.data).toHaveProperty('equipment');
           expect(weatherRes.body.data).toHaveProperty('forecast');
@@ -309,6 +330,48 @@ describe('Equipment Maintenance REST API Tests', () => {
         }
       } finally {
         await request(app).delete(`/api/equipment/${equipId}`);
+      }
+    });
+  });
+
+  describe('5. Sites & Analytical Reports (Case 3)', () => {
+    it('GET /api/sites - получение списка производственных площадок', async () => {
+      const res = await request(app).get('/api/sites');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('GET /api/sites/:id/summary - сводка по площадке, агрегаты мощности и заявок', async () => {
+      const res = await request(app).get(`/api/sites/${demoSiteId}/summary`);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('site');
+      expect(res.body.data.site.id).toBe(demoSiteId);
+      expect(res.body.data).toHaveProperty('metrics');
+      expect(res.body.data.metrics).toHaveProperty('totalEquipment');
+      expect(res.body.data.metrics).toHaveProperty('totalNominalPower');
+      expect(res.body.data.metrics).toHaveProperty('equipmentByStatus');
+      expect(res.body.data.metrics).toHaveProperty('activeRequestsCount');
+    });
+
+    it('GET /api/sites/:id/summary - 404 для несуществующей площадки', async () => {
+      const res = await request(app).get('/api/sites/00000000-0000-0000-0000-000000000000/summary');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('GET /api/reports/maintenance - Raw SQL аналитический отчёт по трудозатратам и MTTR', async () => {
+      const res = await request(app).get('/api/reports/maintenance');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty('overall');
+      expect(res.body.data).toHaveProperty('breakdown');
+      expect(Array.isArray(res.body.data.breakdown)).toBe(true);
+      if (res.body.data.breakdown.length > 0) {
+        const row = res.body.data.breakdown[0];
+        expect(row).toHaveProperty('siteName');
+        expect(row).toHaveProperty('equipmentType');
+        expect(row).toHaveProperty('totalRequests');
+        expect(row).toHaveProperty('totalTechnicianHours');
       }
     });
   });
