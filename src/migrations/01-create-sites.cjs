@@ -1,7 +1,5 @@
 'use strict';
 
-const { sequelize } = require('../lib/db');
-
 /**@type {import ('sequelize-cli').Migration} */
 
 module.exports = {
@@ -30,7 +28,7 @@ module.exports = {
                 type: Sequelize.JSONB,
                 allowNull: true,
             },
-            create_at: {
+            created_at: {
                 type: Sequelize.DATE,
                 allowNull: false,
                 defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
