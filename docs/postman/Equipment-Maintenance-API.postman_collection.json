@@ -463,7 +463,49 @@
           }
         },
         {
-          "name": "6. Change Request Status (new -> in_progress)",
+          "name": "6. Assign Brigade (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Brigade assigned successfully with lead and member', function () {",
+                  "    pm.expect(Array.isArray(json.data)).to.be.true;",
+                  "    pm.expect(json.data.length).to.eql(2);",
+                  "    const lead = json.data.find(a => a.role === 'lead');",
+                  "    pm.expect(lead).to.exist;",
+                  "    pm.expect(lead.technicianId).to.eql(pm.collectionVariables.get('demoTechnicianId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignees\": [\n    {\n      \"technicianId\": \"{{demoTechnicianId}}\",\n      \"role\": \"lead\",\n      \"hours\": 4.5\n    },\n    {\n      \"technicianId\": \"33333333-3333-4333-8333-333333333002\",\n      \"role\": \"member\",\n      \"hours\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "assignees"]
+            }
+          }
+        },
+        {
+          "name": "7. Change Request Status (new -> in_progress)",
           "event": [
             {
               "listen": "test",
@@ -501,19 +543,14 @@
           }
         },
         {
-          "name": "7. Assign Technician (Case 3)",
+          "name": "8. Remove Assignee from Request (Case 3)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 201', function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "const json = pm.response.json();",
-                  "pm.test('Technician assigned successfully', function () {",
-                  "    pm.expect(json.data).to.have.property('technicianId', pm.collectionVariables.get('demoTechnicianId'));",
-                  "    pm.expect(Number(json.data.hours)).to.eql(4.5);",
+                  "pm.test('Status code is 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -521,26 +558,17 @@
             }
           ],
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"technicianId\": \"{{demoTechnicianId}}\",\n  \"role\": \"lead\",\n  \"hours\": 4.5\n}"
-            },
+            "method": "DELETE",
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees/33333333-3333-4333-8333-333333333002",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees"]
+              "path": ["api", "requests", "{{requestId}}", "assignees", "33333333-3333-4333-8333-333333333002"]
             }
           }
         },
         {
-          "name": "8. Get Request History Audit Trail (Case 3)",
+          "name": "9. Get Request History Audit Trail (Case 3)",
           "event": [
             {
               "listen": "test",
@@ -571,7 +599,7 @@
           }
         },
         {
-          "name": "9. Complete Request (in_progress -> done)",
+          "name": "10. Complete Request (in_progress -> done)",
           "event": [
             {
               "listen": "test",
@@ -609,7 +637,7 @@
           }
         },
         {
-          "name": "10. Delete Request",
+          "name": "11. Delete Request",
           "event": [
             {
               "listen": "test",
@@ -707,7 +735,7 @@
       "name": "Reports",
       "item": [
         {
-          "name": "1. Get Maintenance Analytics Report (Raw SQL)",
+          "name": "1. Get Equipment Load Report (Raw SQL)",
           "event": [
             {
               "listen": "test",
@@ -717,10 +745,15 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "const json = pm.response.json();",
-                  "pm.test('Contains report breakdown and overall analytics', function () {",
+                  "pm.test('Contains equipment load report breakdown and overall analytics', function () {",
                   "    pm.expect(json.data).to.have.property('overall');",
                   "    pm.expect(json.data).to.have.property('breakdown');",
                   "    pm.expect(Array.isArray(json.data.breakdown)).to.be.true;",
+                  "    if (json.data.breakdown.length > 0) {",
+                  "        pm.expect(json.data.breakdown[0]).to.have.property('equipmentId');",
+                  "        pm.expect(json.data.breakdown[0]).to.have.property('totalRequests');",
+                  "        pm.expect(json.data.breakdown[0]).to.have.property('totalPlannedHours');",
+                  "    }",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -731,14 +764,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/reports/maintenance",
+              "raw": "{{baseUrl}}/api/reports/equipment-load",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "maintenance"]
+              "path": ["api", "reports", "equipment-load"]
             }
           }
         },
         {
-          "name": "2. Get Maintenance Report Filtered by Site",
+          "name": "2. Get Equipment Load Report Filtered by minRequests (HAVING clause)",
           "event": [
             {
               "listen": "test",
@@ -748,8 +781,12 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "const json = pm.response.json();",
-                  "pm.test('Returns filtered report breakdown', function () {",
+                  "pm.test('Returns filtered report breakdown where totalRequests >= 2', function () {",
                   "    pm.expect(json.data).to.have.property('breakdown');",
+                  "    pm.expect(Array.isArray(json.data.breakdown)).to.be.true;",
+                  "    json.data.breakdown.forEach(item => {",
+                  "        pm.expect(item.totalRequests).to.be.at.least(2);",
+                  "    });",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -760,11 +797,11 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/reports/maintenance?siteId={{demoSiteId}}",
+              "raw": "{{baseUrl}}/api/reports/equipment-load?minRequests=2",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "maintenance"],
+              "path": ["api", "reports", "equipment-load"],
               "query": [
-                { "key": "siteId", "value": "{{demoSiteId}}" }
+                { "key": "minRequests", "value": "2" }
               ]
             }
           }
@@ -1022,6 +1059,158 @@
               "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000005/status",
               "host": ["{{baseUrl}}"],
               "path": ["api", "requests", "44444444-4444-4444-8444-000000000005", "status"]
+            }
+          }
+        },
+        {
+          "name": "404 - Assign Non-existent Technician (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Error code is NOT_FOUND', function () {",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignees\": [\n    {\n      \"technicianId\": \"00000000-0000-0000-0000-000000000000\",\n      \"role\": \"lead\",\n      \"hours\": 3.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "assignees"]
+            }
+          }
+        },
+        {
+          "name": "409 - Duplicate Technician in Brigade (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Error code is CONFLICT', function () {",
+                  "    pm.expect(json.error.code).to.eql('CONFLICT');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignees\": [\n    {\n      \"technicianId\": \"{{demoTechnicianId}}\",\n      \"role\": \"lead\",\n      \"hours\": 3.0\n    },\n    {\n      \"technicianId\": \"{{demoTechnicianId}}\",\n      \"role\": \"member\",\n      \"hours\": 1.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "assignees"]
+            }
+          }
+        },
+        {
+          "name": "409 - Start Request Without Assignees (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Error code is CONFLICT for unassigned in_progress', function () {",
+                  "    pm.expect(json.error.code).to.eql('CONFLICT');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000003/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "44444444-4444-4444-8444-000000000003", "status"]
+            }
+          }
+        },
+        {
+          "name": "422 - Brigade Without Lead or Multiple Leads (Case 3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Error code is UNPROCESSABLE_ENTITY', function () {",
+                  "    pm.expect(json.error.code).to.eql('UNPROCESSABLE_ENTITY');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignees\": [\n    {\n      \"technicianId\": \"{{demoTechnicianId}}\",\n      \"role\": \"lead\",\n      \"hours\": 4.0\n    },\n    {\n      \"technicianId\": \"33333333-3333-4333-8333-333333333002\",\n      \"role\": \"lead\",\n      \"hours\": 2.0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "requests", "{{requestId}}", "assignees"]
             }
           }
         },

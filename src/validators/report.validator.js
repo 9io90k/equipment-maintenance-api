@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const maintenanceReportQuerySchema = z.object({
+export const equipmentLoadReportQuerySchema = z.object({
   startDate: z
     .string()
     .refine((val) => !Number.isNaN(new Date(val).getTime()), {
@@ -14,4 +14,7 @@ export const maintenanceReportQuerySchema = z.object({
     })
     .optional(),
   siteId: z.string().uuid('siteId должен быть валидным UUID').optional(),
+  minRequests: z.coerce.number().int().min(0, 'minRequests не может быть отрицательным').optional(),
 });
+
+export const maintenanceReportQuerySchema = equipmentLoadReportQuerySchema;

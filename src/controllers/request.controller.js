@@ -45,9 +45,15 @@ export class RequestController {
     const history = await this.service.getStatusHistory(req.valid.params.id);
     return res.status(200).json({ data: history });
   };
-  addAssignee = async (req, res) => {
-    const assignee = await this.service.addAssignee(req.valid.params.id, req.valid.body);
-    return res.status(201).json({ data: assignee });
+
+  setAssignees = async (req, res) => {
+    const assignees = await this.service.setAssignees(req.valid.params.id, req.valid.body);
+    return res.status(201).json({ data: assignees });
+  };
+
+  removeAssignee = async (req, res) => {
+    await this.service.removeAssignee(req.valid.params.id, req.valid.params.technicianId);
+    return res.status(204).send();
   };
 }
 

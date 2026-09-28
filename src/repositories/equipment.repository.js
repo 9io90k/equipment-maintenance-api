@@ -1,6 +1,19 @@
 import { Op } from 'sequelize';
 import { Equipment, Site, EquipmentPassport } from '../models/index.js';
 
+const EQUIPMENT_ATTRIBUTES = [
+  'id',
+  'siteId',
+  'name',
+  'type',
+  'serialNumber',
+  'status',
+  'location',
+  'installedAt',
+  'createdAt',
+  'updatedAt',
+];
+
 export class EquipmentRepository {
   async findAndCountAll({
     status,
@@ -31,13 +44,14 @@ export class EquipmentRepository {
     }
 
     const { rows, count } = await Equipment.findAndCountAll({
+      attributes: EQUIPMENT_ATTRIBUTES,
       where,
       limit,
       offset,
       order: [[sortBy, sortOrder.toUpperCase()]],
       include: [
-        { model: Site, as: 'site' },
-        { model: EquipmentPassport, as: 'passport' },
+        { model: Site, as: 'site', attributes: ['id', 'name', 'code', 'region'] },
+        { model: EquipmentPassport, as: 'passport', attributes: ['id', 'manufacturer', 'model', 'nominalPower', 'lastInspectionDate'] },
       ],
     });
 
@@ -49,9 +63,10 @@ export class EquipmentRepository {
 
   async findAll() {
     const items = await Equipment.findAll({
+      attributes: EQUIPMENT_ATTRIBUTES,
       include: [
-        { model: Site, as: 'site' },
-        { model: EquipmentPassport, as: 'passport' },
+        { model: Site, as: 'site', attributes: ['id', 'name', 'code', 'region'] },
+        { model: EquipmentPassport, as: 'passport', attributes: ['id', 'manufacturer', 'model', 'nominalPower'] },
       ],
       order: [['createdAt', 'DESC']],
     });
@@ -60,16 +75,20 @@ export class EquipmentRepository {
 
   async findById(id) {
     const item = await Equipment.findByPk(id, {
+      attributes: EQUIPMENT_ATTRIBUTES,
       include: [
-        { model: Site, as: 'site' },
-        { model: EquipmentPassport, as: 'passport' },
+        { model: Site, as: 'site', attributes: ['id', 'name', 'code', 'region', 'coordinates'] },
+        { model: EquipmentPassport, as: 'passport', attributes: ['id', 'manufacturer', 'model', 'nominalPower', 'lastInspectionDate'] },
       ],
     });
     return item ? item.toJSON() : null;
   }
 
   async findBySerialNumber(serialNumber) {
-    const item = await Equipment.findOne({ where: { serialNumber } });
+    const item = await Equipment.findOne({
+      attributes: EQUIPMENT_ATTRIBUTES,
+      where: { serialNumber },
+    });
     return item ? item.toJSON() : null;
   }
 

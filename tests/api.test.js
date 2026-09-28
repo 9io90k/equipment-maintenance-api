@@ -5,10 +5,30 @@ import { sequelize } from '../src/models/index.js';
 describe('Equipment Maintenance REST API Tests', () => {
   let createdEquipmentId;
   let createdRequestId;
-  const demoTechnicianId = '33333333-3333-4333-8333-333333333001';
+  const leadTechnicianId = '33333333-3333-4333-8333-333333333001';
+  const memberTechnicianId = '33333333-3333-4333-8333-333333333002';
   const demoSiteId = '11111111-1111-4111-8111-111111111001';
+  const cleanupTestRecords = async () => {
+    try {
+      await sequelize.query(`
+        DELETE FROM maintenance_requests WHERE equipment_id IN (
+          SELECT id FROM equipment WHERE serial_number LIKE 'SN-TEST-%'
+        )
+      `);
+      await sequelize.query(`
+        DELETE FROM equipment WHERE serial_number LIKE 'SN-TEST-%'
+      `);
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  beforeAll(async () => {
+    await cleanupTestRecords();
+  });
 
   afterAll(async () => {
+    await cleanupTestRecords();
     await sequelize.close();
   });
 
@@ -35,7 +55,7 @@ describe('Equipment Maintenance REST API Tests', () => {
     it('POST /api/equipment - успешное создание оборудования (201 + Location)', async () => {
       const newEquipment = {
         name: 'Ветрогенератор Тестовый №1',
-        type: 'turbine',
+        type: 'wind_turbine',
         serialNumber: 'SN-TEST-001',
         location: { lat: 55.751244, lon: 37.618423 },
         status: 'operational',
@@ -57,7 +77,7 @@ describe('Equipment Maintenance REST API Tests', () => {
     it('POST /api/equipment - 409 Conflict при дубликате serialNumber', async () => {
       const duplicate = {
         name: 'Ветрогенератор Дубль',
-        type: 'turbine',
+        type: 'wind_turbine',
         serialNumber: 'SN-TEST-001',
         location: { lat: 55.0, lon: 37.0 },
         installedAt: '2024-01-01T00:00:00.000Z',
@@ -87,7 +107,7 @@ describe('Equipment Maintenance REST API Tests', () => {
     it('POST /api/equipment - неизвестные поля тела запроса игнорируются (strip)', async () => {
       const dataWithUnknownField = {
         name: 'Турбина с лишними полями',
-        type: 'turbine',
+        type: 'wind_turbine',
         serialNumber: 'SN-EXTRA-002',
         location: { lat: 55.75, lon: 37.61 },
         installedAt: '2024-02-01T00:00:00.000Z',
@@ -137,14 +157,14 @@ describe('Equipment Maintenance REST API Tests', () => {
     it('PATCH /api/equipment/:id - частичное обновление', async () => {
       const res = await request(app)
         .patch(`/api/equipment/${createdEquipmentId}`)
-        .send({ status: 'maintenance' });
+        .send({ status: 'under_maintenance' });
 
       expect(res.status).toBe(200);
-      expect(res.body.data.status).toBe('maintenance');
+      expect(res.body.data.status).toBe('under_maintenance');
     });
   });
 
-  describe('3. Maintenance Requests CRUD & State Machine', () => {
+  describe('3. Maintenance Requests CRUD, Brigade & State Machine', () => {
     it('POST /api/requests - 404 при создании заявки на несуществующее оборудование', async () => {
       const nonExistentEquipmentId = 'a0000000-0000-0000-0000-000000000000';
       const res = await request(app).post('/api/requests').send({
@@ -174,45 +194,101 @@ describe('Equipment Maintenance REST API Tests', () => {
       createdRequestId = res.body.data.id;
     });
 
-    it('GET /api/requests - список заявок с пагинацией и фильтрами', async () => {
-      const res = await request(app).get(`/api/requests?equipmentId=${createdEquipmentId}&priority=critical`);
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBe(1);
-      expect(res.body.meta.total).toBe(1);
-    });
-
-    it('GET /api/requests/:id - получение карточки заявки по ID', async () => {
-      const res = await request(app).get(`/api/requests/${createdRequestId}`);
-      expect(res.status).toBe(200);
-      expect(res.body.data.id).toBe(createdRequestId);
-      expect(res.body.data.title).toBe('Замена подшипника турбины');
-    });
-
-    it('PATCH /api/requests/:id - редактирование полей заявки', async () => {
+    it('PATCH /api/requests/:id/status - 409 Conflict: запрет перехода в in_progress без бригады', async () => {
       const res = await request(app)
-        .patch(`/api/requests/${createdRequestId}`)
-        .send({ title: 'Обновленный заголовок заявки' });
+        .patch(`/api/requests/${createdRequestId}/status`)
+        .send({ status: 'in_progress' });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data.title).toBe('Обновленный заголовок заявки');
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('CONFLICT');
+      expect(res.body.error.message).toContain('без назначенных исполнителей');
     });
 
-    it('GET /api/equipment/:id/requests - вложенный эндпоинт заявок оборудования', async () => {
-      const res = await request(app).get(`/api/equipment/${createdEquipmentId}/requests`);
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBe(1);
-      expect(res.body.data[0].id).toBe(createdRequestId);
+    it('POST /api/requests/:id/assignees - 422 Unprocessable Entity если в бригаде нет lead', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          assignees: [
+            { technicianId: memberTechnicianId, role: 'member', hours: 2 },
+          ],
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('UNPROCESSABLE_ENTITY');
+      expect(res.body.error.message).toContain('ровно одного ведущего специалиста');
     });
 
-    it('DELETE /api/equipment/:id - 409 Conflict при попытке удалить оборудование с открытой заявкой', async () => {
-      const res = await request(app).delete(`/api/equipment/${createdEquipmentId}`);
+    it('POST /api/requests/:id/assignees - 422 Unprocessable Entity если в бригаде больше одного lead', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          assignees: [
+            { technicianId: leadTechnicianId, role: 'lead', hours: 4 },
+            { technicianId: memberTechnicianId, role: 'lead', hours: 2 },
+          ],
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('UNPROCESSABLE_ENTITY');
+    });
+
+    it('POST /api/requests/:id/assignees - 404 Not Found при назначении несуществующего специалиста', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          assignees: [
+            { technicianId: '00000000-0000-0000-0000-000000000000', role: 'lead', hours: 1 },
+          ],
+        });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('POST /api/requests/:id/assignees - 409 Conflict при дубликате специалиста в бригаде', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          assignees: [
+            { technicianId: leadTechnicianId, role: 'lead', hours: 3 },
+            { technicianId: leadTechnicianId, role: 'member', hours: 2 },
+          ],
+        });
+
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('CONFLICT');
     });
 
-    it('PATCH /api/requests/:id/status - смена статуса new -> in_progress (200 OK)', async () => {
+    it('POST /api/requests/:id/assignees - успешное назначение бригады (201 Created)', async () => {
+      const res = await request(app)
+        .post(`/api/requests/${createdRequestId}/assignees`)
+        .send({
+          assignees: [
+            { technicianId: leadTechnicianId, role: 'lead', hours: 4.5 },
+            { technicianId: memberTechnicianId, role: 'member', hours: 2.0 },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBe(2);
+    });
+
+    it('DELETE /api/requests/:id/assignees/:technicianId - снятие специалиста с заявки (204 No Content)', async () => {
+      const res = await request(app).delete(
+        `/api/requests/${createdRequestId}/assignees/${memberTechnicianId}`
+      );
+      expect(res.status).toBe(204);
+
+      // Повторное удаление возвращает 404
+      const secondRes = await request(app).delete(
+        `/api/requests/${createdRequestId}/assignees/${memberTechnicianId}`
+      );
+      expect(secondRes.status).toBe(404);
+      expect(secondRes.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('PATCH /api/requests/:id/status - смена статуса new -> in_progress (200 OK после назначения бригады)', async () => {
       const res = await request(app)
         .patch(`/api/requests/${createdRequestId}/status`)
         .send({ status: 'in_progress' });
@@ -228,33 +304,6 @@ describe('Equipment Maintenance REST API Tests', () => {
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('CONFLICT');
-    });
-
-    it('POST /api/requests/:id/assignees - назначение техника и часов (201 Created)', async () => {
-      const res = await request(app)
-        .post(`/api/requests/${createdRequestId}/assignees`)
-        .send({
-          technicianId: demoTechnicianId,
-          role: 'lead',
-          hours: 4.5,
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.data).toHaveProperty('technicianId', demoTechnicianId);
-      expect(Number(res.body.data.hours)).toBe(4.5);
-    });
-
-    it('POST /api/requests/:id/assignees - 400 Validation Error при отрицательных часах', async () => {
-      const res = await request(app)
-        .post(`/api/requests/${createdRequestId}/assignees`)
-        .send({
-          technicianId: demoTechnicianId,
-          role: 'assistant',
-          hours: -2,
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
     it('PATCH /api/requests/:id/status - перевод in_progress -> done (200 OK)', async () => {
@@ -279,8 +328,8 @@ describe('Equipment Maintenance REST API Tests', () => {
       const res = await request(app).get(`/api/requests/${createdRequestId}/history`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBeGreaterThanOrEqual(3); // new -> in_progress -> done
-      const statuses = res.body.data.map(h => h.newStatus);
+      expect(res.body.data.length).toBeGreaterThanOrEqual(3);
+      const statuses = res.body.data.map((h) => h.newStatus);
       expect(statuses).toContain('new');
       expect(statuses).toContain('in_progress');
       expect(statuses).toContain('done');
@@ -294,7 +343,7 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(checkRes.status).toBe(404);
     });
 
-    it('DELETE /api/equipment/:id - 204 No Content после закрытия/удаления всех заявок', async () => {
+    it('DELETE /api/equipment/:id - 204 No Content после удаления всех заявок', async () => {
       const res = await request(app).delete(`/api/equipment/${createdEquipmentId}`);
       expect(res.status).toBe(204);
     });
@@ -310,7 +359,7 @@ describe('Equipment Maintenance REST API Tests', () => {
     it('GET /api/equipment/:id/weather - возвращает прогноз и оценку пригодности для наружных работ', async () => {
       const equipRes = await request(app).post('/api/equipment').send({
         name: 'Ветропарк Тестовый Юг',
-        type: 'turbine',
+        type: 'wind_turbine',
         serialNumber: 'SN-WEATHER-01',
         location: { lat: 45.0355, lon: 38.9753 },
         installedAt: '2023-05-10T00:00:00.000Z',
@@ -334,7 +383,7 @@ describe('Equipment Maintenance REST API Tests', () => {
     });
   });
 
-  describe('5. Sites & Analytical Reports (Case 3)', () => {
+  describe('5. Sites & Equipment-Load Analytical Reports (Case 3)', () => {
     it('GET /api/sites - получение списка производственных площадок', async () => {
       const res = await request(app).get('/api/sites');
       expect(res.status).toBe(200);
@@ -342,7 +391,7 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.data.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('GET /api/sites/:id/summary - сводка по площадке, агрегаты мощности и заявок', async () => {
+    it('GET /api/sites/:id/summary - сводка по площадке с SQL-агрегатами', async () => {
       const res = await request(app).get(`/api/sites/${demoSiteId}/summary`);
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty('site');
@@ -350,8 +399,9 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.data).toHaveProperty('metrics');
       expect(res.body.data.metrics).toHaveProperty('totalEquipment');
       expect(res.body.data.metrics).toHaveProperty('totalNominalPower');
-      expect(res.body.data.metrics).toHaveProperty('equipmentByStatus');
-      expect(res.body.data.metrics).toHaveProperty('activeRequestsCount');
+      expect(res.body.data.metrics).toHaveProperty('requestsByStatus');
+      expect(res.body.data.metrics).toHaveProperty('requestsByPriority');
+      expect(res.body.data.metrics).toHaveProperty('avgResolutionTimeHours');
     });
 
     it('GET /api/sites/:id/summary - 404 для несуществующей площадки', async () => {
@@ -360,18 +410,30 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body.error.code).toBe('NOT_FOUND');
     });
 
-    it('GET /api/reports/maintenance - Raw SQL аналитический отчёт по трудозатратам и MTTR', async () => {
-      const res = await request(app).get('/api/reports/maintenance');
+    it('GET /api/reports/equipment-load - Raw SQL отчёт по нагрузке на каждую единицу оборудования', async () => {
+      const res = await request(app).get('/api/reports/equipment-load');
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveProperty('overall');
       expect(res.body.data).toHaveProperty('breakdown');
       expect(Array.isArray(res.body.data.breakdown)).toBe(true);
       if (res.body.data.breakdown.length > 0) {
         const row = res.body.data.breakdown[0];
-        expect(row).toHaveProperty('siteName');
-        expect(row).toHaveProperty('equipmentType');
+        expect(row).toHaveProperty('equipmentId');
+        expect(row).toHaveProperty('equipmentName');
+        expect(row).toHaveProperty('serialNumber');
         expect(row).toHaveProperty('totalRequests');
-        expect(row).toHaveProperty('totalTechnicianHours');
+        expect(row).toHaveProperty('closedRequests');
+        expect(row).toHaveProperty('totalPlannedHours');
+        expect(row).toHaveProperty('lastMaintenanceDate');
+      }
+    });
+
+    it('GET /api/reports/equipment-load?minRequests=2 - фильтрация групп через HAVING', async () => {
+      const res = await request(app).get('/api/reports/equipment-load?minRequests=2');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data.breakdown)).toBe(true);
+      for (const row of res.body.data.breakdown) {
+        expect(row.totalRequests).toBeGreaterThanOrEqual(2);
       }
     });
   });

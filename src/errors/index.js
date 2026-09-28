@@ -27,6 +27,12 @@ export class BadRequestError extends AppError {
   }
 }
 
+export class UnprocessableEntityError extends AppError {
+  constructor(message = 'Необрабатываемая сущность', details) {
+    super(message, { status: 422, code: 'UNPROCESSABLE_ENTITY', details });
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(zodError) {
     const details = zodError.issues.map((issue) => {
