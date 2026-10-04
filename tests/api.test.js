@@ -437,4 +437,50 @@ describe('Equipment Maintenance REST API Tests', () => {
       }
     });
   });
+
+  describe('6. Transaction Atomicity & Rollback Demonstration (Item 28)', () => {
+    it('ROLLBACK: при ошибке в транзакции изменения откатываются и запись не сохраняется в БД', async () => {
+      const { MaintenanceRequest, Equipment } = await import('../src/models/index.js');
+      const validEquipment = await Equipment.findOne();
+      const testReqId = '88888888-8888-4888-8888-888888888888';
+
+      // Попытка выполнения транзакции с искусственной ошибкой на 2-м шаге
+      let caughtError = null;
+      try {
+        await sequelize.transaction(async (t) => {
+          // Шаг 1: Создаем заявку в транзакции
+          await MaintenanceRequest.create(
+            {
+              id: testReqId,
+              equipmentId: validEquipment.id,
+              title: 'Транзакционная тестовая заявка',
+              priority: 'low',
+              status: 'new',
+            },
+            { transaction: t }
+          );
+
+          // Шаг 2: Искусственный сбой (выброс исключения перед коммитом)
+          throw new Error('Simulated mid-transaction failure for rollback testing');
+        });
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).not.toBeNull();
+      expect(caughtError.message).toBe('Simulated mid-transaction failure for rollback testing');
+
+      // Проверяем, что в БД заявка НЕ сохранилась (был выполнен чистый ROLLBACK)
+      const foundInDb = await MaintenanceRequest.findByPk(testReqId);
+      expect(foundInDb).toBeNull();
+    });
+
+    it('ETL Migration: миграция legacy-данных Case 2 выполняется без ошибок в транзакции', async () => {
+      const { migrateLegacyData } = await import('../scripts/migrate-case2-data.js');
+      const stats = await migrateLegacyData();
+      expect(stats).toHaveProperty('equipmentCreated');
+      expect(stats).toHaveProperty('requestsCreated');
+      expect(stats).toHaveProperty('historyCreated');
+    });
+  });
 });

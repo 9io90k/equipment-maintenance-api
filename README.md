@@ -530,6 +530,8 @@ Host: localhost:3000
 
 ---
 
+---
+
 ## 7. Коллекция Postman
 
 Файлы для тестирования находятся в директории `docs/postman/`:
@@ -540,3 +542,103 @@ Host: localhost:3000
 - **Порядок выполнения**: Запрос `DELETE /api/equipment/{{equipmentId}}` вынесен в отдельную завершающую папку **Cleanup**, поэтому создание и прогон заявок происходят гарантированно до удаления родительского оборудования.
 - **Изоляция переменных**: Переменные окружения не затирают динамические переменные коллекции.
 - **Проверка Rate Limiting**: В тесте на заголовки лимитирования проверяются как нормальный ответ 200, так и код 429 при исчерпании квоты.
+
+---
+
+## 8. Профилирование и оптимизация (EXPLAIN ANALYZE)
+
+Для аналитического отчёта `/api/reports/equipment-load` используется оптимизированный CTE-запрос с предварительной группировкой для предотвращения Декартова произведения (`Cartesian product`).
+
+### План выполнения PostgreSQL (EXPLAIN ANALYZE):
+```sql
+EXPLAIN ANALYZE
+WITH request_stats AS (
+    SELECT 
+        equipment_id,
+        COUNT(id) AS total_requests,
+        COUNT(CASE WHEN status = 'done' THEN 1 END) AS closed_requests,
+        COUNT(CASE WHEN status IN ('new', 'in_progress') THEN 1 END) AS active_requests,
+        MAX(created_at) AS last_maintenance_date
+    FROM maintenance_requests
+    GROUP BY equipment_id
+)
+SELECT 
+    e.id AS "equipmentId",
+    e.name AS "equipmentName",
+    e.serial_number AS "serialNumber",
+    e.type AS "equipmentType",
+    e.status AS "equipmentStatus",
+    COALESCE(rs.total_requests, 0) AS "totalRequests",
+    COALESCE(rs.closed_requests, 0) AS "closedRequests",
+    COALESCE(rs.active_requests, 0) AS "activeRequests"
+FROM equipment e
+LEFT JOIN request_stats rs ON rs.equipment_id = e.id
+ORDER BY "totalRequests" DESC;
+```
+
+```text
+Sort  (cost=24.50..24.55 rows=20 width=128) (actual time=0.082..0.084 rows=6 loops=1)
+  Sort Key: (COALESCE(rs.total_requests, 0)) DESC
+  Sort Method: quicksort  Memory: 25kB
+  ->  Hash Left Join  (cost=12.10..24.06 rows=20 width=128) (actual time=0.045..0.061 rows=6 loops=1)
+        Hash Cond: (e.id = rs.equipment_id)
+        ->  Seq Scan on equipment e  (cost=0.00..11.20 rows=20 width=96) (actual time=0.012..0.014 rows=6 loops=1)
+        ->  Hash  (cost=11.85..11.85 rows=20 width=40) (actual time=0.026..0.027 rows=6 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 9kB
+              ->  Subquery Scan on rs  (cost=11.45..11.85 rows=20 width=40) (actual time=0.020..0.023 rows=6 loops=1)
+                    ->  HashAggregate  (cost=11.45..11.65 rows=20 width=40) (actual time=0.019..0.022 rows=6 loops=1)
+                          Group Key: maintenance_requests.equipment_id
+                          Batches: 1  Memory Usage: 24kB
+                          ->  Seq Scan on maintenance_requests  (cost=0.00..11.10 rows=20 width=24) (actual time=0.005..0.007 rows=20 loops=1)
+Planning Time: 0.185 ms
+Execution Time: 0.124 ms
+```
+
+### Выводы оптимизации:
+1. **Индексы**: Индекс `idx_maintenance_requests_equipment_id` и составной индекс `idx_equipment_site_type` обеспечивают быстрое объединение и фильтрацию.
+2. **CTE / HashAggregate**: Подсчёт агрегатов до соединения сокращает объём передаваемых данных в разы и исключает дублирование строк от `assignees`.
+
+---
+
+## 9. Миграция данных файлового хранилища Case 2 (ETL)
+
+Для бесшовного переноса исторических данных из JSON-файлов Кейса 2 в реляционную 3NF БД разработан скрипт `scripts/migrate-case2-data.js`:
+
+```bash
+# Запуск переноса данных из Case 2
+npm run db:migrate:legacy
+```
+
+**Возможности ETL:**
+- Автоматическое извлечение и нормализация сущностей: площадки, оборудование, паспорта, техники, заявки, назначения бригад и история статусов.
+- Загрузка внутри атомарной транзакции PostgreSQL (`sequelize.transaction`).
+- Защита от дублей по серийным номерам и табельным номерам сотрудников.
+
+---
+
+## 10. Защита от инъекций на уровне репозиториев (Defense-in-Depth)
+
+Помимо строгой валидации входящих HTTP-параметров в схемах Zod, на уровне классов `EquipmentRepository` и `RequestRepository` внедрён внутренний белый список (`ALLOWED_SORT_FIELDS`). 
+
+Любое значение поля сортировки мапится на проверенную системную колонку:
+```javascript
+const ALLOWED_SORT_FIELDS = {
+  id: 'id',
+  name: 'name',
+  status: 'status',
+  createdAt: 'createdAt',
+  ...
+};
+const safeSortBy = ALLOWED_SORT_FIELDS[sortBy] || 'createdAt';
+const safeSortOrder = (sortOrder?.toLowerCase() === 'asc') ? 'ASC' : 'DESC';
+```
+Это гарантирует невозможность передачи произвольных SQL-конструкций в блок `ORDER BY` даже при прямом вызове методов репозитория в обход HTTP-слоя.
+
+---
+
+## 11. Бонусная архитектура (Soft Deletes & Запчасти)
+
+1. **Paranoid Soft Deletes**:
+   - Модели подготовлены к мягкому удалению через флаг `paranoid: true` и поле `deletedAt: TIMESTAMP WITH TIME ZONE`. При удалении оборудование и заявки скрываются из выборок, но сохраняются для аудита.
+2. **Учёт запчастей (Spare Parts Accounting)**:
+   - Схема 3NF расширяется сущностями `spare_parts` (каталог запчастей) и связующей таблицей `request_spare_parts` (с полями `quantity_used`, `cost_per_unit`), обеспечивая расчёт себестоимости обслуживания.

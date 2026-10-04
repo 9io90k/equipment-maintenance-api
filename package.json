@@ -15,6 +15,7 @@
     "db:seed": "sequelize-cli db:seed:all",
     "db:seed:all": "sequelize-cli db:seed:all",
     "db:seed:undo:all": "sequelize-cli db:seed:undo:all",
+    "db:migrate:legacy": "node scripts/migrate-case2-data.js",
     "db:reset": "npm run db:migrate:undo:all && npm run db:migrate && npm run db:seed:all"
   },
   "keywords": [
