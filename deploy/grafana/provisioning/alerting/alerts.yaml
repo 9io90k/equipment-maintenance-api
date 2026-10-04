@@ -1,0 +1,117 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: equipment_maintenance_alerts
+    folder: 'Equipment Maintenance'
+    interval: 1m
+    rules:
+      - uid: high_5xx_error_rate
+        title: High 5xx Error Rate (> 5%)
+        condition: B
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: (sum(rate(http_errors_total{error_type="5xx"}[5m])) or vector(0)) / (sum(rate(http_requests_total[5m])) > 0 or vector(1)) * 100
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: '-100'
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: '-100'
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        annotations:
+          summary: "Высокая доля серверных ошибок 5xx (> 5%)"
+          description: "Доля ответов 5xx превысила порог 5% за последние 5 минут. Требуется вмешательство дежурного инженера по регламенту Runbook."
+        labels:
+          severity: critical
+          service: equipment-maintenance-api
+
+      - uid: service_down_alert
+        title: Equipment Maintenance API Down
+        condition: B
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: app_up == 0
+              intervalMs: 15000
+              maxDataPoints: 43200
+              range: true
+              refId: A
+          - refId: B
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: '-100'
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: '-100'
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+        noDataState: Alerting
+        execErrState: Error
+        for: 30s
+        annotations:
+          summary: "Сервис Equipment Maintenance API недоступен"
+          description: "Индикатор app_up равен 0. Процесс Node.js остановлен или упал."
+        labels:
+          severity: disaster
+          service: equipment-maintenance-api

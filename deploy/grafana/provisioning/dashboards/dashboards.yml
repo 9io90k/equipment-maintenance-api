@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'Equipment Maintenance Dashboards'
+    orgId: 1
+    folder: 'Equipment Maintenance'
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 15
+    options:
+      path: /var/lib/grafana/dashboards
