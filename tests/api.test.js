@@ -1,6 +1,24 @@
-import request from 'supertest';
+import supertest from 'supertest';
 import app from '../src/app.js';
 import { sequelize } from '../src/models/index.js';
+import { signAccessToken } from '../src/lib/jwt.js';
+
+const adminToken = signAccessToken({
+  id: '77777777-7777-4777-8777-777777777001',
+  email: 'admin@energy.local',
+  role: 'admin',
+});
+
+const request = (targetApp) => {
+  const reqObj = supertest(targetApp);
+  return {
+    get: (url) => reqObj.get(url).set('Authorization', `Bearer ${adminToken}`),
+    post: (url) => reqObj.post(url).set('Authorization', `Bearer ${adminToken}`),
+    patch: (url) => reqObj.patch(url).set('Authorization', `Bearer ${adminToken}`),
+    put: (url) => reqObj.put(url).set('Authorization', `Bearer ${adminToken}`),
+    delete: (url) => reqObj.delete(url).set('Authorization', `Bearer ${adminToken}`),
+  };
+};
 
 describe('Equipment Maintenance REST API Tests', () => {
   let createdEquipmentId;

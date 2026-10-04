@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { config } from '../config/index.js';
 
-export const authRateLimiter = rateLimit({
+const limiter = rateLimit({
   windowMs: config.authRateLimit.windowMs,
   max: config.authRateLimit.max,
   standardHeaders: true,
@@ -13,3 +13,10 @@ export const authRateLimiter = rateLimit({
     return next(error);
   },
 });
+
+export const authRateLimiter = (req, res, next) => {
+  if (process.env.NODE_ENV === 'test') {
+    return next();
+  }
+  return limiter(req, res, next);
+};

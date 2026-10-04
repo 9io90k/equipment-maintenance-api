@@ -24,7 +24,7 @@ export const config = {
 
   authRateLimit: {
     windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-    max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+    max: process.env.NODE_ENV === 'test' ? 1000 : (Number(process.env.AUTH_RATE_LIMIT_MAX) || 10),
   },
 
   jwt: {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 
@@ -18,6 +19,7 @@ export const signRefreshToken = (user) => {
   return jwt.sign(
     {
       userId: user.id,
+      jti: randomUUID(),
     },
     config.jwt.refreshSecret,
     { expiresIn: config.jwt.refreshExpiresIn }
