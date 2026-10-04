@@ -47,12 +47,28 @@ export class RequestRepository {
       if (plannedTo) where.plannedAt[Op.lte] = new Date(plannedTo);
     }
 
+    const ALLOWED_SORT_FIELDS = {
+      id: 'id',
+      equipmentId: 'equipmentId',
+      title: 'title',
+      priority: 'priority',
+      status: 'status',
+      author: 'author',
+      plannedAt: 'plannedAt',
+      closedAt: 'closedAt',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+    };
+
+    const safeSortBy = ALLOWED_SORT_FIELDS[sortBy] || 'createdAt';
+    const safeSortOrder = (typeof sortOrder === 'string' && sortOrder.toLowerCase() === 'asc') ? 'ASC' : 'DESC';
+
     const { rows, count } = await MaintenanceRequest.findAndCountAll({
       attributes: REQUEST_ATTRIBUTES,
       where,
       limit,
       offset,
-      order: [[sortBy, sortOrder.toUpperCase()]],
+      order: [[safeSortBy, safeSortOrder]],
       include: [
         {
           model: Equipment,

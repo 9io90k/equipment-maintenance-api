@@ -43,12 +43,27 @@ export class EquipmentRepository {
       if (installedTo) where.installedAt[Op.lte] = new Date(installedTo);
     }
 
+    const ALLOWED_SORT_FIELDS = {
+      id: 'id',
+      siteId: 'siteId',
+      name: 'name',
+      type: 'type',
+      serialNumber: 'serialNumber',
+      status: 'status',
+      installedAt: 'installedAt',
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+    };
+
+    const safeSortBy = ALLOWED_SORT_FIELDS[sortBy] || 'createdAt';
+    const safeSortOrder = (typeof sortOrder === 'string' && sortOrder.toLowerCase() === 'asc') ? 'ASC' : 'DESC';
+
     const { rows, count } = await Equipment.findAndCountAll({
       attributes: EQUIPMENT_ATTRIBUTES,
       where,
       limit,
       offset,
-      order: [[sortBy, sortOrder.toUpperCase()]],
+      order: [[safeSortBy, safeSortOrder]],
       include: [
         { model: Site, as: 'site', attributes: ['id', 'name', 'code', 'region'] },
         { model: EquipmentPassport, as: 'passport', attributes: ['id', 'manufacturer', 'model', 'nominalPower', 'lastInspectionDate'] },
