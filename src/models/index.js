@@ -6,6 +6,8 @@ import { MaintenanceRequest } from './maintenance-request.model.js';
 import { Technician } from './technician.model.js';
 import { RequestAssignee } from './request-assignee.model.js';
 import { RequestStatusHistory } from './request-status-history.model.js';
+import { User } from './user.model.js';
+import { RefreshToken } from './refresh-token.model.js';
 
 Site.hasMany(Equipment, {
   foreignKey: 'siteId',
@@ -79,6 +81,25 @@ RequestAssignee.belongsTo(Technician, {
   as: 'technician',
 });
 
+User.belongsTo(Technician, {
+  foreignKey: 'technicianId',
+  as: 'technician',
+});
+Technician.hasOne(User, {
+  foreignKey: 'technicianId',
+  as: 'user',
+});
+
+User.hasMany(RefreshToken, {
+  foreignKey: 'userId',
+  as: 'refreshTokens',
+  onDelete: 'CASCADE',
+});
+RefreshToken.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+});
+
 export {
   sequelize,
   Site,
@@ -88,4 +109,6 @@ export {
   Technician,
   RequestAssignee,
   RequestStatusHistory,
+  User,
+  RefreshToken,
 };
