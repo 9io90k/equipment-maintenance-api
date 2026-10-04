@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 
 import { config } from './config/index.js';
 import { httpLogger } from './middlewares/http-logger.middleware.js';
+import { metricsMiddleware, getMetrics, getMetricsContentType } from './lib/metrics.js';
 import { contextMiddleware } from './lib/context.js';
 import { errorHandler } from './middlewares/error-handler.middleware.js';
 import { NotFoundError } from './errors/index.js';
@@ -17,7 +18,17 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(httpLogger);
+app.use(metricsMiddleware);
 app.use(contextMiddleware);
+
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', getMetricsContentType());
+  return res.end(await getMetrics());
+});
+
+app.get('/healthz', (_req, res) => {
+  return res.status(200).json({ status: 'ok' });
+});
 
 app.use(helmet());
 

@@ -59,6 +59,29 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.headers).toHaveProperty('x-request-id');
     });
 
+    it('GET /api/health/live - проверка жизнеспособности процесса Node.js (200 OK)', async () => {
+      const res = await request(app).get('/api/health/live');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('status', 'up');
+      expect(res.body).toHaveProperty('uptime');
+      expect(res.body).toHaveProperty('timestamp');
+    });
+
+    it('GET /api/health/ready - готовность к обслуживанию с проверкой БД (200 OK)', async () => {
+      const res = await request(app).get('/api/health/ready');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('status', 'up');
+      expect(res.body).toHaveProperty('services');
+      expect(res.body.services).toHaveProperty('database', 'up');
+    });
+
+    it('GET /metrics - отдача метрик в формате Prometheus', async () => {
+      const res = await request(app).get('/metrics');
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('http_requests_total');
+      expect(res.text).toContain('process_cpu_seconds_total');
+    });
+
     it('GET /api/unknown - должен возвращать 404 в стандартном формате ошибки', async () => {
       const res = await request(app).get('/api/unknown');
       expect(res.status).toBe(404);
