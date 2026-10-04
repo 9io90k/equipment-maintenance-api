@@ -1,0 +1,7 @@
+{
+  "type": "https://errors.energy.local/service-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "The service is temporarily unavailable due to maintenance or capacity limits.",
+  "code": "SERVICE_UNAVAILABLE"
+}

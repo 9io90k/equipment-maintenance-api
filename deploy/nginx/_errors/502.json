@@ -1,0 +1,7 @@
+{
+  "type": "https://errors.energy.local/bad-gateway",
+  "title": "Bad Gateway",
+  "status": 502,
+  "detail": "The upstream application server is unreachable or starting up.",
+  "code": "BAD_GATEWAY"
+}
