@@ -105,14 +105,14 @@ export const updateBusinessMetrics = async () => {
     const overdueCount = await MaintenanceRequest.count({
       where: {
         plannedAt: { [Op.lt]: new Date() },
-        status: { [Op.notIn]: ['completed', 'canceled'] },
+        status: { [Op.notIn]: ['done', 'rejected'] },
       },
     });
     maintenanceOverdueTotal.set(overdueCount);
 
     const completedRequests = await MaintenanceRequest.findAll({
       where: {
-        status: 'completed',
+        status: 'done',
         closedAt: { [Op.ne]: null },
       },
       attributes: ['createdAt', 'closedAt'],
