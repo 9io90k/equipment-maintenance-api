@@ -36,7 +36,7 @@ export const verifyRefreshToken = (token) => {
 
 export const getRefreshTokenCookieOptions = () => ({
   httpOnly: true,
-  secure: config.isProduction,
+  secure: config.jwt.cookieSecure,
   sameSite: 'strict',
   path: '/api/auth',
   maxAge: 7 * 24 * 60 * 60 * 1000,

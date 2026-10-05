@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-equipment_db}
       POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-OGIWEJfJSKL123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA: /var/lib/postgresql/data
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -36,21 +36,23 @@ services:
       PGPORT: 5432
       PGDATABASE: ${POSTGRES_DB:-equipment_db}
       PGUSER: ${POSTGRES_USER:-app}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-OGIWEJfJSKL123}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-equipment_db}
       DB_USER: ${POSTGRES_USER:-app}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-OGIWEJfJSKL123}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-super-secret-access-token-key-for-prod-32-chars!}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super-secret-refresh-token-key-for-prod-32-chars!}
-      CORS_ORIGINS: "*"
-      LOG_LEVEL: info
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RUN_SEEDS: ${RUN_SEEDS:-true}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health/live"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -93,8 +95,8 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_USERS_DEFAULT_THEME=dark
     volumes:

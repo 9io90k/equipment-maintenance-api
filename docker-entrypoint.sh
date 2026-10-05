@@ -13,8 +13,12 @@ echo "[entrypoint] PostgreSQL port is open."
 echo "[entrypoint] Applying database migrations..."
 npx sequelize-cli db:migrate
 
-echo "[entrypoint] Applying demo seeders if needed..."
-npx sequelize-cli db:seed:all || echo "[entrypoint] Seeders already applied or skipped."
+if [ "${RUN_SEEDS:-true}" = "true" ]; then
+  echo "[entrypoint] Applying demo seeders..."
+  npx sequelize-cli db:seed:all || echo "[entrypoint] Seeders already applied or skipped."
+else
+  echo "[entrypoint] Demo seeders skipped (RUN_SEEDS=${RUN_SEEDS})."
+fi
 
 echo "[entrypoint] Launching application..."
 exec "$@"
