@@ -1,0 +1,7 @@
+{
+  "type": "https://errors.energy.local/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "The requested resource was not found on this server.",
+  "code": "NOT_FOUND"
+}

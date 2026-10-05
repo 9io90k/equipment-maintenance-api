@@ -1,0 +1,7 @@
+{
+  "type": "https://errors.energy.local/gateway-timeout",
+  "title": "Gateway Timeout",
+  "status": 504,
+  "detail": "The upstream application server failed to respond in a timely manner.",
+  "code": "GATEWAY_TIMEOUT"
+}

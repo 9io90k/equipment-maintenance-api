@@ -46,11 +46,11 @@ export const config = {
   },
 
   db: {
-    host: process.env.PGHOST || 'localhost',
-    port: Number(process.env.PGPORT) || 5432,
-    database: process.env.PGDATABASE || 'equipment_db',
-    user: process.env.PGUSER || 'app',
-    password: process.env.PGPASSWORD || '',
+    host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
+    port: Number(process.env.PGPORT || process.env.DB_PORT) || 5432,
+    database: process.env.PGDATABASE || process.env.DB_NAME || 'equipment_db',
+    user: process.env.PGUSER || process.env.DB_USER || 'app',
+    password: process.env.PGPASSWORD || process.env.DB_PASSWORD || '',
     pool: {
       max: Number(process.env.DB_POOL_MAX) || 10,
       min: Number(process.env.DB_POOL_MIN) || 2,
