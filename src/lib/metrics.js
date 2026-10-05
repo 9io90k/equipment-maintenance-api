@@ -43,6 +43,18 @@ export const maintenanceMttrHours = new promClient.Gauge({
   help: 'Mean Time To Resolution (MTTR) in hours for closed requests',
 });
 
+export const maintenanceEquipmentTotal = new promClient.Gauge({
+  name: 'maintenance_equipment_total',
+  help: 'Total number of equipment by status and type',
+  labelNames: ['status', 'type'],
+});
+
+export const maintenanceEquipmentLoadRequests = new promClient.Gauge({
+  name: 'maintenance_equipment_load_requests',
+  help: 'Number of active maintenance requests per equipment',
+  labelNames: ['equipment_name', 'equipment_type'],
+});
+
 export const metricsMiddleware = (req, res, next) => {
   if (req.path === '/metrics' || req.path.startsWith('/api/health')) {
     return next();
@@ -128,6 +140,46 @@ export const updateBusinessMetrics = async () => {
       maintenanceMttrHours.set(Number((totalHours / completedRequests.length).toFixed(2)));
     } else {
       maintenanceMttrHours.set(0);
+    }
+
+    const { Equipment } = await import('../models/equipment.model.js');
+
+    const equipmentCounts = await Equipment.findAll({
+      attributes: ['status', 'type', [fn('COUNT', col('id')), 'count']],
+      group: ['status', 'type'],
+      raw: true,
+    });
+    maintenanceEquipmentTotal.reset();
+    for (const item of equipmentCounts) {
+      maintenanceEquipmentTotal.set(
+        { status: item.status, type: item.type },
+        Number(item.count) || 0
+      );
+    }
+
+    const activeRequests = await MaintenanceRequest.findAll({
+      where: {
+        status: { [Op.in]: ['new', 'in_progress'] },
+      },
+      attributes: ['equipmentId', [fn('COUNT', col('id')), 'count']],
+      group: ['equipmentId'],
+      raw: true,
+    });
+    const equipments = await Equipment.findAll({
+      attributes: ['id', 'name', 'type'],
+      raw: true,
+    });
+    const equipMap = new Map(equipments.map((e) => [e.id, e]));
+
+    maintenanceEquipmentLoadRequests.reset();
+    for (const item of activeRequests) {
+      const equip = equipMap.get(item.equipmentId);
+      const equipName = equip ? equip.name : String(item.equipmentId || 'unknown');
+      const equipType = equip ? equip.type : 'unknown';
+      maintenanceEquipmentLoadRequests.set(
+        { equipment_name: equipName, equipment_type: equipType },
+        Number(item.count) || 0
+      );
     }
   } catch (_err) {
     // Safely ignore DB errors during metrics scraping

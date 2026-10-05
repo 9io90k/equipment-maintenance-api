@@ -47,7 +47,7 @@ docker compose logs -f nginx
 
 ## 3. Регламенты действий при типовых авариях (Incident Playbooks)
 
-### 🚨 Инцидент 1: Отказ СУБД PostgreSQL (`Database Unavailable`)
+### Инцидент 1: Отказ СУБД PostgreSQL (`Database Unavailable`)
 
 **Симптомы:**
 - Readiness-проба `GET /api/health/ready` возвращает HTTP `503 Service Unavailable`:
@@ -82,10 +82,10 @@ docker compose logs -f nginx
 
 ---
 
-### 🚨 Инцидент 2: Всплеск доли ошибок 5xx (> 5%)
+### Инцидент 2: Всплеск доли ошибок 5xx (> 5%)
 
 **Симптомы:**
-- В Grafana срабатывает алерт **High5xxRate** (`http_errors_total / http_requests_total > 0.05`).
+- В Grafana срабатывает алерт **High5xxErrorRate** (`sum(rate(http_errors_total{error_type="5xx"}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5%`).
 - Клиенты получают ответы `500 Internal Server Error` или `502 Bad Gateway`.
 
 **Порядок устранения:**
@@ -111,7 +111,7 @@ docker compose logs -f nginx
 
 ---
 
-### 🚨 Инцидент 3: Переполнение дискового пространства
+### Инцидент 3: Переполнение дискового пространства
 
 **Симптомы:**
 - PostgreSQL переходит в режим read-only.
@@ -137,7 +137,7 @@ docker compose logs -f nginx
 
 ---
 
-### 🚨 Инцидент 4: Процедура отката миграций базы данных
+### Инцидент 4: Процедура отката миграций базы данных
 
 Если после релиза новой версии обнаружена критическая ошибка в схеме данных, необходимо выполнить контролируемый откат миграции.
 
@@ -161,7 +161,7 @@ docker compose logs -f nginx
 
 ---
 
-### 🚨 Инцидент 5: Обнаружение компрометации токена (Theft / Reuse Detection)
+### Инцидент 5: Обнаружение компрометации токена (Theft / Reuse Detection)
 
 **Симптомы:**
 - В логах API фиксируется предупреждение безопасности:
