@@ -85,7 +85,7 @@ docker compose logs -f nginx
 ### Инцидент 2: Всплеск доли ошибок 5xx (> 5%)
 
 **Симптомы:**
-- В Grafana срабатывает алерт **High5xxRate** (`http_errors_total / http_requests_total > 0.05`).
+- В Grafana срабатывает алерт **High5xxErrorRate** (`sum(rate(http_errors_total{error_type="5xx"}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5%`).
 - Клиенты получают ответы `500 Internal Server Error` или `502 Bad Gateway`.
 
 **Порядок устранения:**

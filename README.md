@@ -124,12 +124,13 @@ curl -i http://localhost/api/health/ready
    - Панели SLA, RED метрики (RPS, Error Rate %, Latency p95).
    - Распределение заявок по статусам и уровням критичности.
    - Сводные показатели просрочек и динамика MTTR.
+   - Статистика оборудования по типам/статусам и загрузка оборудования (активные заявки в работе).
 2. **Node.js Application Runtime**:
    - Мониторинг сборщика мусора V8, утечек памяти, задержки событийного цикла и загрузки CPU.
 
 ### 5. Правила алертов:
-- **CriticalServiceDown**: срабатывает при падении экземпляра приложения (`app_up == 0`).
-- **High5xxErrorRate**: срабатывает при превышении доли серверных ошибок > 5% за 1 минуту.
+- **Equipment Maintenance API Down** (`service_down_alert`): срабатывает при падении экземпляра приложения (`app_up == 0`).
+- **High 5xx Error Rate (> 5%)** (`high_5xx_error_rate` / `High5xxErrorRate`): срабатывает при превышении доли серверных 5xx ошибок > 5% за скользящее окно 5 минут (`sum(rate(http_errors_total{error_type="5xx"}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5%`).
 
 ---
 
