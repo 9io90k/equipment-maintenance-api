@@ -391,6 +391,27 @@ describe('Equipment Maintenance REST API Tests', () => {
   });
 
   describe('4. Weather Endpoint Integration', () => {
+    beforeAll(() => {
+      jest.spyOn(global, 'fetch').mockImplementation(async () => {
+        return {
+          ok: true,
+          json: async () => ({
+            daily: {
+              time: ['2023-05-10', '2023-05-11', '2023-05-12'],
+              temperature_2m_max: [20, 22, 21],
+              temperature_2m_min: [10, 11, 10],
+              precipitation_sum: [0, 0, 0],
+              wind_speed_10m_max: [5, 6, 5],
+            },
+          }),
+        };
+      });
+    });
+
+    afterAll(() => {
+      jest.restoreAllMocks();
+    });
+
     it('GET /api/equipment/:id/weather - 404 для несуществующего оборудования', async () => {
       const res = await request(app).get('/api/equipment/00000000-0000-0000-0000-000000000000/weather');
       expect(res.status).toBe(404);
