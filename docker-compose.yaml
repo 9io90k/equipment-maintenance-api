@@ -8,9 +8,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-equipment_db}
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-OGIWEJfJSKL123}
+      PGDATA: /var/lib/postgresql/data
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
+    # Порт привязан исключительно к 127.0.0.1: снаружи БД недоступна, но возможен запуск npm test с хоста
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
@@ -89,7 +91,7 @@ services:
     image: grafana/grafana:11.5.2
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin

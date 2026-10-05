@@ -61,7 +61,7 @@ curl -i http://localhost/api/health/ready
 | **API & Gateway** | `http://localhost/api` | Основной программный интерфейс через Nginx |
 | **Swagger UI** | `http://localhost/api/docs/` | Интерактивная документация OpenAPI 3.0 с поддержкой Bearer JWT |
 | **OpenAPI Spec** | `http://localhost/api/docs/json` | Спецификация OpenAPI 3.0 в формате JSON |
-| **Grafana Dashboards** | `http://localhost:3001` | Дашборды мониторинга (анонимный Admin, пароль не требуется) |
+| **Grafana Dashboards** | `http://localhost:3001` | Дашборды мониторинга (логин: `admin`, пароль: `admin`) |
 | **Prometheus** | `http://localhost:9090` *(internal)* | Сервер сбора метрик |
 
 ---
@@ -152,12 +152,20 @@ curl -i http://localhost/api/health/ready
 
 ## 7. Локальный запуск и тестирование
 
-### Запуск полного набора автотестов:
-Тестовый набор включает модульные, интеграционные тесты и тесты документации (59 тестов):
-
-```bash
-npm test
-```
+### Запуск тестов:
+- **Все тесты (модульные + интеграционные)**:
+  ```bash
+  npm test
+  ```
+- **Изолированные модульные тесты бизнес-логики (без БД)**:
+  ```bash
+  npm run test:unit
+  ```
+- **Формирование отчёта о покрытии (Coverage Report)**:
+  ```bash
+  npm run test:coverage
+  ```
+  *(Генерирует отчёт в консоли и сохраняет HTML/LCOV артефакты в каталоге `coverage/`)*
 
 ### Запуск в режиме разработки:
 ```bash

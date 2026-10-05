@@ -89,6 +89,19 @@ describe('Authentication & RBAC Tests (Phase 1)', () => {
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
+    it('POST /api/auth/register - 400 при попытке зарегистрироваться с ролью admin', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: 'hacker@energy.local',
+          password: 'Password123!',
+          role: 'admin',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('POST /api/auth/login - успешный вход с выдачей access-токена и refresh-cookie', async () => {
       const res = await request(app)
         .post('/api/auth/login')

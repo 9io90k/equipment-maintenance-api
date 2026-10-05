@@ -3,7 +3,7 @@ import { requestRepository } from '../repositories/request.repository.js';
 import { equipmentRepository } from '../repositories/equipment.repository.js';
 import { NotFoundError, ConflictError, UnprocessableEntityError, ForbiddenError } from '../errors/index.js';
 
-const ALLOWED_TRANSITIONS = {
+export const ALLOWED_TRANSITIONS = {
     new: ['in_progress', 'rejected'],
     in_progress: ['done', 'rejected'],
     done: [],

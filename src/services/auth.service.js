@@ -19,7 +19,7 @@ export class AuthService {
     this.userRepo = userRepo;
   }
 
-  async register({ email, password, role = 'viewer', technicianId = null }) {
+  async register({ email, password }) {
     const existing = await this.userRepo.findByEmail(email);
     if (existing) {
       throw new ConflictError('Пользователь с таким email уже существует');
@@ -29,8 +29,8 @@ export class AuthService {
     const user = await this.userRepo.create({
       email,
       passwordHash,
-      role,
-      technicianId,
+      role: 'viewer',
+      technicianId: null,
     });
 
     const accessToken = signAccessToken(user);

@@ -86,10 +86,9 @@ export const openApiSpec = {
         type: 'object',
         required: ['email', 'password'],
         properties: {
-          email: { type: 'string', format: 'email', example: 'technician@example.com' },
+          email: { type: 'string', format: 'email', example: 'user@example.com' },
           password: { type: 'string', minLength: 8, maxLength: 128, example: 'SecurePassword123!' },
-          role: { type: 'string', enum: ['viewer', 'technician', 'admin'], default: 'viewer' },
-          technicianId: { type: 'string', format: 'uuid', nullable: true },
+          role: { type: 'string', enum: ['viewer'], default: 'viewer', description: 'По ТЗ публичная регистрация создаёт пользователя с ролью viewer' },
         },
       },
       LoginRequest: {
@@ -292,7 +291,7 @@ export const openApiSpec = {
       post: {
         tags: ['Authentication & Users'],
         summary: 'Регистрация нового пользователя',
-        description: 'Создает учетную запись пользователя. Доступные роли: `viewer`, `technician`, `admin`.',
+        description: 'Создает учетную запись пользователя с ролью `viewer` (по ТЗ публичная регистрация создаёт пользователя только с ролью viewer).',
         requestBody: {
           required: true,
           content: {
