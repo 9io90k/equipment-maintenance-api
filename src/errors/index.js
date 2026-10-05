@@ -50,3 +50,16 @@ export class ValidationError extends AppError {
     });
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Требуется аутентификация') {
+    super(message, { status: 401, code: 'UNAUTHORIZED' });
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = 'Недостаточно прав') {
+    super(message, { status: 403, code: 'FORBIDDEN' });
+  }
+}
+

@@ -4,9 +4,11 @@ import equipmentRouter from './equipment.route.js';
 import requestRouter from './request.route.js';
 import siteRouter from './site.route.js';
 import reportRouter from './report.route.js';
+import authRouter from './auth.route.js';
 
 const router = Router();
 
+router.use('/auth', authRouter);
 router.use('/', healthRouter);
 router.use('/equipment', equipmentRouter);
 router.use('/requests', requestRouter);

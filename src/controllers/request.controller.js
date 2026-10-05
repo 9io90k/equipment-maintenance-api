@@ -27,7 +27,13 @@ export class RequestController {
   };
 
   updateStatus = async (req, res) => {
-    const updated = await this.service.updateStatus(req.valid.params.id, req.valid.body.status);
+    const updated = await this.service.updateStatus(
+      req.valid.params.id,
+      req.valid.body.status,
+      req.user?.email || 'system',
+      req.valid.body.comment || null,
+      req.user
+    );
     return res.status(200).json({ data: updated });
   };
 

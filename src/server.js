@@ -3,6 +3,8 @@ import { config } from './config/index.js';
 import { logger } from './lib/logger.js';
 import { sequelize, waitForDatabase } from './lib/db.js';
 
+import { appUpGauge } from './lib/metrics.js';
+
 let server;
 let isShuttingDown = false;
 
@@ -20,22 +22,24 @@ async function startServer() {
         `server started successfully on port ${config.port}`
       );
     });
+
+    server.keepAliveTimeout = 65_000;
+    server.headersTimeout = 66_000;
   } catch (err) {
     logger.fatal({ err }, 'Failed to start server due to database connection error');
     process.exit(1);
   }
 }
 
-
-
 async function gracefulShutdown(reason, err) {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  appUpGauge.set(0);
 
   setTimeout(() => {
     logger.error('Forced shutdown: connections did not close in time');
     process.exit(1);
-  }, 10_000).unref();
+  }, 25_000).unref();
 
   if (err) {
     logger.fatal({ err, reason }, `Shutting down due to ${reason}`);
@@ -44,8 +48,9 @@ async function gracefulShutdown(reason, err) {
   }
 
   if (server) {
+    server.closeIdleConnections();
     await new Promise((resolve) => server.close(resolve));
-    logger.info('HTTP server closed, сlosing database pool...');
+    logger.info('HTTP server closed, closing database pool...');
   }
 
   try {

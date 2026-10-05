@@ -247,6 +247,14 @@ export class RequestRepository {
     return history.map((h) => h.toJSON());
   }
 
+  async isTechnicianAssigned(requestId, technicianId) {
+    if (!technicianId) return false;
+    const count = await RequestAssignee.count({
+      where: { requestId, technicianId },
+    });
+    return count > 0;
+  }
+
   async setAssignees(requestId, assignees) {
     return await sequelize.transaction(async (t) => {
       await RequestAssignee.destroy({ where: { requestId }, transaction: t });

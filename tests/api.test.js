@@ -1,6 +1,24 @@
-import request from 'supertest';
+import supertest from 'supertest';
 import app from '../src/app.js';
 import { sequelize } from '../src/models/index.js';
+import { signAccessToken } from '../src/lib/jwt.js';
+
+const adminToken = signAccessToken({
+  id: '77777777-7777-4777-8777-777777777001',
+  email: 'admin@energy.local',
+  role: 'admin',
+});
+
+const request = (targetApp) => {
+  const reqObj = supertest(targetApp);
+  return {
+    get: (url) => reqObj.get(url).set('Authorization', `Bearer ${adminToken}`),
+    post: (url) => reqObj.post(url).set('Authorization', `Bearer ${adminToken}`),
+    patch: (url) => reqObj.patch(url).set('Authorization', `Bearer ${adminToken}`),
+    put: (url) => reqObj.put(url).set('Authorization', `Bearer ${adminToken}`),
+    delete: (url) => reqObj.delete(url).set('Authorization', `Bearer ${adminToken}`),
+  };
+};
 
 describe('Equipment Maintenance REST API Tests', () => {
   let createdEquipmentId;
@@ -39,6 +57,29 @@ describe('Equipment Maintenance REST API Tests', () => {
       expect(res.body).toHaveProperty('status', 'ok');
       expect(res.body).toHaveProperty('uptime');
       expect(res.headers).toHaveProperty('x-request-id');
+    });
+
+    it('GET /api/health/live - проверка жизнеспособности процесса Node.js (200 OK)', async () => {
+      const res = await request(app).get('/api/health/live');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('status', 'up');
+      expect(res.body).toHaveProperty('uptime');
+      expect(res.body).toHaveProperty('timestamp');
+    });
+
+    it('GET /api/health/ready - готовность к обслуживанию с проверкой БД (200 OK)', async () => {
+      const res = await request(app).get('/api/health/ready');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('status', 'up');
+      expect(res.body).toHaveProperty('services');
+      expect(res.body.services).toHaveProperty('database', 'up');
+    });
+
+    it('GET /metrics - отдача метрик в формате Prometheus', async () => {
+      const res = await request(app).get('/metrics');
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('http_requests_total');
+      expect(res.text).toContain('process_cpu_seconds_total');
     });
 
     it('GET /api/unknown - должен возвращать 404 в стандартном формате ошибки', async () => {

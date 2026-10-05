@@ -22,6 +22,18 @@ export const config = {
     max: Number(process.env.RATE_LIMIT_MAX) || 100,
   },
 
+  authRateLimit: {
+    windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 1000 : (Number(process.env.AUTH_RATE_LIMIT_MAX) || 10),
+  },
+
+  jwt: {
+    accessSecret: process.env.JWT_ACCESS_SECRET || 'dev-access-secret-change-in-production',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-production',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
+
   weather: {
     apiUrl: process.env.WEATHER_API_URL || 'https://api.open-meteo.com/v1/forecast',
     timeoutMs: Number(process.env.REQUEST_TIMEOUT_MS) || 5000,

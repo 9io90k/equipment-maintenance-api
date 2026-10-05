@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { requestRepository } from '../repositories/request.repository.js';
 import { equipmentRepository } from '../repositories/equipment.repository.js';
-import { NotFoundError, ConflictError, UnprocessableEntityError } from '../errors/index.js';
+import { NotFoundError, ConflictError, UnprocessableEntityError, ForbiddenError } from '../errors/index.js';
 
 const ALLOWED_TRANSITIONS = {
     new: ['in_progress', 'rejected'],
@@ -100,8 +100,20 @@ export class RequestService {
         return await this.reqRepo.update(id, patch);
     }
 
-    async updateStatus(id, newStatus, changedBy = 'system', comment = null) {
+    async updateStatus(id, newStatus, changedBy = 'system', comment = null, currentUser = null) {
         const current = await this.getById(id);
+
+        if (currentUser) {
+            if (currentUser.role === 'technician') {
+                const isAssigned = await this.reqRepo.isTechnicianAssigned(id, currentUser.technicianId);
+                if (!isAssigned) {
+                    throw new ForbiddenError('Техник может менять статус только тех заявок, на которые он назначен');
+                }
+            } else if (currentUser.role !== 'admin') {
+                throw new ForbiddenError('Недостаточно прав для изменения статуса заявки');
+            }
+            changedBy = currentUser.email || changedBy;
+        }
 
         const allowed = ALLOWED_TRANSITIONS[current.status] || [];
         if (!allowed.includes(newStatus)) {

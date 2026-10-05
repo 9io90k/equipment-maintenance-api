@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { reportController } from '../controllers/report.controller.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { equipmentLoadReportQuerySchema } from '../validators/report.validator.js';
+import { authenticate } from '../middlewares/auth.middleware.js';
 
 const router = Router();
+
+router.use(authenticate);
 
 router.get(
   '/equipment-load',

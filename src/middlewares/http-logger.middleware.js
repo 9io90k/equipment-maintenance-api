@@ -26,6 +26,8 @@ export const httpLogger = pinoHttp({
     return `${req.method} ${req.originalUrl || req.url} ${res.statusCode} error: ${err.message}`;
   },
   autoLogging: {
-    ignore: (req) => req.url === '/api/health' && req.method === 'GET',
+    ignore: (req) =>
+      req.method === 'GET' &&
+      (req.url === '/metrics' || req.url === '/api/metrics' || req.url?.startsWith('/api/health') || req.url === '/healthz'),
   },
 });
