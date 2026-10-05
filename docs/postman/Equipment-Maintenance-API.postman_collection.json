@@ -1,13 +1,13 @@
 {
   "info": {
-    "name": "Equipment Maintenance API (CaseLab Week 3)",
-    "description": "Комплексная коллекция Postman для тестирования REST API учёта оборудования, заявок, бригад техников, производственных площадок и аналитических отчётов (PostgreSQL + Sequelize).",
+    "name": "Equipment Maintenance API (CaseLab Week 4 — Production Ready)",
+    "description": "Комплексная коллекция Postman для тестирования REST API Кейса 4: Аутентификация (JWT + HttpOnly Cookie), RBAC/ABAC разграничение прав, учёт оборудования, заявок, бригад, аналитики, мониторинга и OpenAPI документации.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000",
+      "value": "http://localhost",
       "type": "string"
     },
     {
@@ -34,9 +34,289 @@
       "key": "demoTechnicianId",
       "value": "33333333-3333-4333-8333-333333333001",
       "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@energy.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Password123!",
+      "type": "string"
+    },
+    {
+      "key": "technicianEmail",
+      "value": "technician@energy.local",
+      "type": "string"
+    },
+    {
+      "key": "technicianPassword",
+      "value": "Password123!",
+      "type": "string"
+    },
+    {
+      "key": "viewerEmail",
+      "value": "viewer@energy.local",
+      "type": "string"
+    },
+    {
+      "key": "viewerPassword",
+      "value": "Password123!",
+      "type": "string"
     }
   ],
   "item": [
+    {
+      "name": "Authentication & RBAC",
+      "description": "Эндпоинты аутентификации, получения токенов сессии и профиля пользователя",
+      "item": [
+        {
+          "name": "01. Login as Admin (Auto-sets Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property(\"accessToken\");",
+                  "    pm.collectionVariables.set(\"accessToken\", json.data.accessToken);",
+                  "    pm.expect(json.data.user.role).to.eql(\"admin\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Login as Technician (Auto-sets Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property(\"accessToken\");",
+                  "    pm.collectionVariables.set(\"accessToken\", json.data.accessToken);",
+                  "    pm.expect(json.data.user.role).to.eql(\"technician\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{technicianEmail}}\",\n  \"password\": \"{{technicianPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03. Login as Viewer (Auto-sets Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property(\"accessToken\");",
+                  "    pm.collectionVariables.set(\"accessToken\", json.data.accessToken);",
+                  "    pm.expect(json.data.user.role).to.eql(\"viewer\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{viewerEmail}}\",\n  \"password\": \"{{viewerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "04. Get Current User Profile (Me)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "05. Register New User (Viewer Only)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman-newuser@energy.local\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "06. Refresh Token Rotation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    if (json.data && json.data.accessToken) {",
+                  "        pm.collectionVariables.set(\"accessToken\", json.data.accessToken);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
+          "name": "07. Logout Session",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "Health",
       "item": [
@@ -47,8 +327,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
             }
           },
           "event": [
@@ -73,6 +361,84 @@
               }
             }
           ]
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "live"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Readiness Probe (DB Check)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "ready"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "OpenAPI Specification JSON",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/docs/json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "docs",
+                "json"
+              ]
+            }
+          }
         }
       ]
     },
@@ -128,8 +494,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment"
+              ]
             }
           }
         },
@@ -162,14 +533,34 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment?page=1&limit=10&status=operational&sortBy=createdAt&sortOrder=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "10" },
-                { "key": "status", "value": "operational" },
-                { "key": "sortBy", "value": "createdAt" },
-                { "key": "sortOrder", "value": "desc" }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "operational"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
               ]
             }
           }
@@ -200,8 +591,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "{{equipmentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "{{equipmentId}}"
+              ]
             }
           }
         },
@@ -238,8 +635,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "{{equipmentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "{{equipmentId}}"
+              ]
             }
           }
         },
@@ -271,8 +674,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}/weather",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "{{equipmentId}}", "weather"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "{{equipmentId}}",
+                "weather"
+              ]
             }
           }
         }
@@ -320,8 +730,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ]
             }
           }
         },
@@ -352,15 +767,38 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests?page=1&limit=10&status=new&priority=high&sortBy=createdAt&sortOrder=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "10" },
-                { "key": "status", "value": "new" },
-                { "key": "priority", "value": "high" },
-                { "key": "sortBy", "value": "createdAt" },
-                { "key": "sortOrder", "value": "desc" }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "new"
+                },
+                {
+                  "key": "priority",
+                  "value": "high"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
               ]
             }
           }
@@ -389,8 +827,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}"
+              ]
             }
           }
         },
@@ -419,8 +863,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}/requests",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "{{equipmentId}}", "requests"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "{{equipmentId}}",
+                "requests"
+              ]
             }
           }
         },
@@ -457,8 +908,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}"
+              ]
             }
           }
         },
@@ -499,8 +956,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "assignees"
+              ]
             }
           }
         },
@@ -537,8 +1001,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "status"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "status"
+              ]
             }
           }
         },
@@ -562,8 +1033,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees/33333333-3333-4333-8333-333333333002",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees", "33333333-3333-4333-8333-333333333002"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "assignees",
+                "33333333-3333-4333-8333-333333333002"
+              ]
             }
           }
         },
@@ -593,8 +1072,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/history",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "history"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "history"
+              ]
             }
           }
         },
@@ -631,8 +1117,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "status"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "status"
+              ]
             }
           }
         },
@@ -656,8 +1149,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}"
+              ]
             }
           }
         }
@@ -691,8 +1190,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sites",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sites"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sites"
+              ]
             }
           }
         },
@@ -724,8 +1228,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sites/{{demoSiteId}}/summary",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sites", "{{demoSiteId}}", "summary"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sites",
+                "{{demoSiteId}}",
+                "summary"
+              ]
             }
           }
         }
@@ -765,8 +1276,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/reports/equipment-load",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "equipment-load"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "equipment-load"
+              ]
             }
           }
         },
@@ -798,10 +1315,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/reports/equipment-load?minRequests=2",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "reports", "equipment-load"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "equipment-load"
+              ],
               "query": [
-                { "key": "minRequests", "value": "2" }
+                {
+                  "key": "minRequests",
+                  "value": "2"
+                }
               ]
             }
           }
@@ -847,8 +1373,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment"
+              ]
             }
           }
         },
@@ -876,8 +1407,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/not-a-valid-uuid",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "not-a-valid-uuid"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "not-a-valid-uuid"
+              ]
             }
           }
         },
@@ -914,8 +1451,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000001/assignees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "44444444-4444-4444-8444-000000000001", "assignees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "44444444-4444-4444-8444-000000000001",
+                "assignees"
+              ]
             }
           }
         },
@@ -943,8 +1487,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/00000000-0000-0000-0000-000000000000",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "00000000-0000-0000-0000-000000000000"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "00000000-0000-0000-0000-000000000000"
+              ]
             }
           }
         },
@@ -981,8 +1531,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ]
             }
           }
         },
@@ -1019,8 +1574,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/equipment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment"
+              ]
             }
           }
         },
@@ -1057,8 +1617,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000005/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "44444444-4444-4444-8444-000000000005", "status"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "44444444-4444-4444-8444-000000000005",
+                "status"
+              ]
             }
           }
         },
@@ -1095,8 +1662,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "assignees"
+              ]
             }
           }
         },
@@ -1133,8 +1707,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "assignees"
+              ]
             }
           }
         },
@@ -1171,8 +1752,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/44444444-4444-4444-8444-000000000003/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "44444444-4444-4444-8444-000000000003", "status"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "44444444-4444-4444-8444-000000000003",
+                "status"
+              ]
             }
           }
         },
@@ -1209,8 +1797,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/requests/{{requestId}}/assignees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "requests", "{{requestId}}", "assignees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests",
+                "{{requestId}}",
+                "assignees"
+              ]
             }
           }
         },
@@ -1237,8 +1832,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
             }
           }
         }
@@ -1267,12 +1867,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/equipment/{{equipmentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "equipment", "{{equipmentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "equipment",
+                "{{equipmentId}}"
+              ]
             }
           }
         }
       ]
     }
-  ]
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
 }
