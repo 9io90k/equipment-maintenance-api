@@ -25,7 +25,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 100,
-      "title": "🟢 Technical Observability (RED Metrics & SLA)",
+      "title": "Technical Observability (RED Metrics & SLA)",
       "type": "row"
     },
     {
@@ -212,7 +212,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
       "id": 200,
-      "title": "💼 Business Observability (Equipment & Maintenance Requests)",
+      "title": "Business Observability (Equipment & Maintenance Requests)",
       "type": "row"
     },
     {
